@@ -191,6 +191,13 @@ create table if not exists public.beefs (
 -- Lets an admin pin a beef to the top of the home feed.
 alter table public.beefs add column if not exists pinned boolean not null default false;
 
+-- Optional link to a real member, alongside the free-text `target` column.
+-- `target` stays free text on purpose (a beef can be with "the guy from
+-- 3B", not just a real profile) — this is additive structure so a beef can
+-- ALSO be tied to a member reliably, e.g. for a "My Nemeses" list, without
+-- losing the ability to target non-members.
+alter table public.beefs add column if not exists target_profile_id uuid references public.profiles (id) on delete set null;
+
 alter table public.beefs enable row level security;
 
 drop policy if exists "beefs_select_authenticated" on public.beefs;
@@ -290,6 +297,47 @@ create policy "photos_bucket_delete_own"
   on storage.objects for delete
   to authenticated
   using (bucket_id = 'photos' and owner = auth.uid());
+
+-- =========================================================
+-- photo_tags (who's in a Photo Gallery photo)
+-- =========================================================
+create table if not exists public.photo_tags (
+  id uuid primary key default gen_random_uuid(),
+  photo_id uuid not null references public.photos (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (photo_id, profile_id)
+);
+
+-- Unlike content tables (awards, quotes, etc.), both FKs here cascade
+-- instead of set-null on purpose: a tag is metadata about who's IN someone
+-- else's photo, not the tagged person's own content, so there's nothing to
+-- preserve by nulling it out — deleting the photo or the tagged profile
+-- should just remove the tag row.
+alter table public.photo_tags enable row level security;
+
+drop policy if exists "photo_tags_select_authenticated" on public.photo_tags;
+create policy "photo_tags_select_authenticated"
+  on public.photo_tags for select
+  to authenticated
+  using (true);
+
+-- Only the photo's own uploader can tag people in it — v1 is
+-- upload-time-only tagging (no editing existing photos), so this mirrors
+-- that at the RLS layer via a subquery against photos.uploaded_by rather
+-- than a column on this table.
+drop policy if exists "photo_tags_insert_by_uploader" on public.photo_tags;
+create policy "photo_tags_insert_by_uploader"
+  on public.photo_tags for insert
+  to authenticated
+  with check (
+    exists (
+      select 1 from public.photos p
+      where p.id = photo_id and p.uploaded_by = auth.uid()
+    )
+  );
+
+-- No update/delete policy: tags are immutable after upload for v1.
 
 -- =========================================================
 -- sounds (Soundboard)

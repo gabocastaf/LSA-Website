@@ -14,6 +14,7 @@ type PhotoRow = {
   created_at: string;
   uploaded_by: string | null;
   uploader: { id: string; display_name: string | null; email: string } | null;
+  tags: { profile: { id: string; display_name: string | null; email: string } | null }[];
 };
 
 export default async function PhotoGalleryPage({
@@ -32,14 +33,20 @@ export default async function PhotoGalleryPage({
     redirect("/login");
   }
 
+  const { data: members } = await supabase
+    .from("profiles")
+    .select("id, display_name, email")
+    .order("display_name", { ascending: true });
+
   const { data: photoRows } = await supabase
     .from("photos")
     .select(
-      "id, storage_path, caption, created_at, uploaded_by, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email)",
+      "id, storage_path, caption, created_at, uploaded_by, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email), tags:photo_tags(profile:profiles(id, display_name, email))",
     )
     .order("created_at", { ascending: false })
     .returns<PhotoRow[]>();
 
+  const roster = members ?? [];
   const photos = photoRows ?? [];
 
   return (
@@ -74,7 +81,21 @@ export default async function PhotoGalleryPage({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="caption">Caption (optional, but recommended for context)</Label>
-              <Input id="caption" name="caption" placeholder="e.g. Nobody remembers how this happened" />
+              <Input id="caption" name="caption" placeholder="e.g. Pedro's next AI masterclass" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Who&apos;s in this? (optional)</Label>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                {roster.map((profile) => (
+                  <label
+                    key={profile.id}
+                    className="flex items-center gap-1.5 text-sm font-normal"
+                  >
+                    <input type="checkbox" name="taggedProfileIds" value={profile.id} />
+                    {profile.display_name ?? profile.email}
+                  </label>
+                ))}
+              </div>
             </div>
             <Button type="submit" className="w-full sm:w-auto">
               Add to the Gallery
@@ -111,6 +132,14 @@ export default async function PhotoGalleryPage({
                     {photo.uploader?.display_name ?? photo.uploader?.email ?? "Unknown"} ·{" "}
                     {new Date(photo.created_at).toLocaleDateString()}
                   </p>
+                  {photo.tags.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Featuring:{" "}
+                      {photo.tags
+                        .map((tag) => tag.profile?.display_name ?? tag.profile?.email ?? "Unknown")
+                        .join(", ")}
+                    </p>
+                  )}
                   {isOwner && (
                     <form action={deletePhoto}>
                       <input type="hidden" name="photoId" value={photo.id} />

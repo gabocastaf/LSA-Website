@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { createBeef, toggleBeefStatus } from "./actions";
 
+const selectClassName =
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30";
+
 type BeefRow = {
   id: string;
   title: string;
@@ -50,6 +53,11 @@ export default async function BeefTrackerPage({
     redirect("/login");
   }
 
+  const { data: members } = await supabase
+    .from("profiles")
+    .select("id, display_name, email")
+    .order("display_name", { ascending: true });
+
   const { data: beefRows } = await supabase
     .from("beefs")
     .select(
@@ -58,6 +66,7 @@ export default async function BeefTrackerPage({
     .order("created_at", { ascending: false })
     .returns<BeefRow[]>();
 
+  const roster = members ?? [];
   const beefs = beefRows ?? [];
   const activeBeefs = beefs.filter((beef) => beef.status === "active");
   const squashedBeefs = beefs.filter((beef) => beef.status === "squashed");
@@ -88,6 +97,22 @@ export default async function BeefTrackerPage({
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="target">Who or what it&apos;s with (optional)</Label>
               <Input id="target" name="target" placeholder="e.g. the guy from 3B" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="targetProfileId">Is that actually a member? (optional)</Label>
+              <select
+                id="targetProfileId"
+                name="targetProfileId"
+                defaultValue=""
+                className={selectClassName}
+              >
+                <option value="">Not a real person</option>
+                {roster.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.display_name ?? profile.email}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="reason">Details (optional)</Label>

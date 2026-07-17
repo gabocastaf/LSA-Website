@@ -11,6 +11,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 export async function uploadPhoto(formData: FormData) {
   const file = formData.get("file");
   const caption = formData.get("caption")?.toString().trim();
+  const taggedProfileIds = formData.getAll("taggedProfileIds").map((id) => id.toString());
 
   const supabase = await createClient();
 
@@ -45,15 +46,33 @@ export async function uploadPhoto(formData: FormData) {
     redirect(`/frat-history/photo-gallery?error=${encodeURIComponent(uploadError.message)}`);
   }
 
-  const { error: insertError } = await supabase.from("photos").insert({
-    storage_path: storagePath,
-    caption: caption || null,
-    uploaded_by: user.id,
-  });
+  const { data: photo, error: insertError } = await supabase
+    .from("photos")
+    .insert({
+      storage_path: storagePath,
+      caption: caption || null,
+      uploaded_by: user.id,
+    })
+    .select("id")
+    .single();
 
-  if (insertError) {
+  if (insertError || !photo) {
     await supabase.storage.from("photos").remove([storagePath]);
-    redirect(`/frat-history/photo-gallery?error=${encodeURIComponent(insertError.message)}`);
+    redirect(
+      `/frat-history/photo-gallery?error=${encodeURIComponent(insertError?.message ?? "Upload failed")}`,
+    );
+  }
+
+  if (taggedProfileIds.length > 0) {
+    // Best-effort, same as the storage cleanup above: the photo itself
+    // already uploaded successfully, so a tagging hiccup shouldn't fail
+    // the whole request.
+    await supabase.from("photo_tags").insert(
+      taggedProfileIds.map((profileId) => ({
+        photo_id: photo.id,
+        profile_id: profileId,
+      })),
+    );
   }
 
   revalidatePath("/frat-history/photo-gallery");

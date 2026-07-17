@@ -8,6 +8,7 @@ import { createClient } from "@/utils/supabase/server";
 export async function createBeef(formData: FormData) {
   const title = formData.get("title")?.toString().trim();
   const target = formData.get("target")?.toString().trim();
+  const targetProfileId = formData.get("targetProfileId")?.toString().trim();
   const reason = formData.get("reason")?.toString().trim();
 
   const supabase = await createClient();
@@ -27,6 +28,7 @@ export async function createBeef(formData: FormData) {
   const { error } = await supabase.from("beefs").insert({
     title,
     target: target || null,
+    target_profile_id: targetProfileId || null,
     reason: reason || null,
     created_by: user.id,
   });
