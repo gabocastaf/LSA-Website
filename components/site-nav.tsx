@@ -17,6 +17,7 @@ const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/roster", label: "Roster" },
   { href: "/events", label: "Events" },
+  { href: "/thread", label: "Thread" },
   { href: "/dues", label: "Dues" },
   { href: "/frat-history", label: "Frat History" },
 ];

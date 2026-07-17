@@ -4,24 +4,17 @@ import { createClient } from "@/utils/supabase/server";
 import { SiteNav } from "@/components/site-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-const ROLE_LABEL: Record<string, string> = {
-  pledge: "Pledge",
-  active: "Active",
-  admin: "Admin",
-};
+import { ROLE_LABEL, rankBadgeClass } from "@/lib/rank";
 
 function RoleBadge({ role }: { role: string }) {
   return (
     <span
       className={cn(
         "inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        role === "admin" && "bg-foreground text-background",
-        role === "active" && "bg-secondary text-secondary-foreground",
-        role === "pledge" && "bg-muted text-muted-foreground",
+        rankBadgeClass(role),
       )}
     >
-      {ROLE_LABEL[role] ?? role}
+      {ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role}
     </span>
   );
 }

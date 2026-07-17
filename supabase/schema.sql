@@ -45,6 +45,9 @@ create table if not exists public.events (
   created_at timestamptz not null default now()
 );
 
+-- Lets an admin pin an event to the top of the home feed (e.g. formal, rush week).
+alter table public.events add column if not exists pinned boolean not null default false;
+
 alter table public.events enable row level security;
 
 drop policy if exists "events_select_authenticated" on public.events;
@@ -110,6 +113,9 @@ create table if not exists public.awards (
   created_at timestamptz not null default now()
 );
 
+-- Lets an admin pin a trophy to the top of the home feed.
+alter table public.awards add column if not exists pinned boolean not null default false;
+
 alter table public.awards enable row level security;
 
 drop policy if exists "awards_select_authenticated" on public.awards;
@@ -134,6 +140,9 @@ create table if not exists public.quotes (
   submitted_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+-- Lets an admin pin a quote to the top of the home feed.
+alter table public.quotes add column if not exists pinned boolean not null default false;
 
 alter table public.quotes enable row level security;
 
@@ -161,6 +170,9 @@ create table if not exists public.beefs (
   created_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+-- Lets an admin pin a beef to the top of the home feed.
+alter table public.beefs add column if not exists pinned boolean not null default false;
 
 alter table public.beefs enable row level security;
 
@@ -219,6 +231,9 @@ create table if not exists public.photos (
   created_at timestamptz not null default now()
 );
 
+-- Lets an admin pin a photo to the top of the home feed.
+alter table public.photos add column if not exists pinned boolean not null default false;
+
 alter table public.photos enable row level security;
 
 drop policy if exists "photos_select_authenticated" on public.photos;
@@ -270,6 +285,9 @@ create table if not exists public.sounds (
   created_at timestamptz not null default now()
 );
 
+-- Lets an admin pin a sound clip to the top of the home feed.
+alter table public.sounds add column if not exists pinned boolean not null default false;
+
 alter table public.sounds enable row level security;
 
 drop policy if exists "sounds_select_authenticated" on public.sounds;
@@ -307,6 +325,49 @@ create policy "sounds_bucket_delete_own"
   on storage.objects for delete
   to authenticated
   using (bucket_id = 'sounds' and owner = auth.uid());
+
+-- =========================================================
+-- thread_messages (the Thread — general chapter banter)
+-- =========================================================
+create table if not exists public.thread_messages (
+  id uuid primary key default gen_random_uuid(),
+  body text not null,
+  author_id uuid references public.profiles (id) on delete set null,
+  pinned boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.thread_messages enable row level security;
+
+drop policy if exists "thread_messages_select_authenticated" on public.thread_messages;
+create policy "thread_messages_select_authenticated"
+  on public.thread_messages for select
+  to authenticated
+  using (true);
+
+drop policy if exists "thread_messages_insert_own" on public.thread_messages;
+create policy "thread_messages_insert_own"
+  on public.thread_messages for insert
+  to authenticated
+  with check (author_id = auth.uid());
+
+-- No update/delete policy: matches awards/quotes — no editing the record after
+-- the fact.
+
+-- Publish thread_messages over Supabase Realtime so the Thread page can
+-- stream new messages live instead of requiring a refresh. Guarded so
+-- re-running this file doesn't error once the table is already published.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'thread_messages'
+  ) then
+    alter publication supabase_realtime add table public.thread_messages;
+  end if;
+end $$;
 
 -- =========================================================
 -- Auto-create a profile row whenever a new auth.users row appears
