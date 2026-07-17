@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { uploadSound, deleteSound } from "./actions";
 
 type SoundRow = {
@@ -12,6 +13,7 @@ type SoundRow = {
   storage_path: string;
   title: string;
   created_at: string;
+  hidden: boolean;
   uploaded_by: string | null;
   uploader: { id: string; display_name: string | null; email: string } | null;
 };
@@ -32,15 +34,23 @@ export default async function SoundboardPage({
     redirect("/login");
   }
 
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const isAdmin = viewerProfile?.role === "admin";
+
   const { data: soundRows } = await supabase
     .from("sounds")
     .select(
-      "id, storage_path, title, created_at, uploaded_by, uploader:profiles!sounds_uploaded_by_fkey(id, display_name, email)",
+      "id, storage_path, title, created_at, hidden, uploaded_by, uploader:profiles!sounds_uploaded_by_fkey(id, display_name, email)",
     )
     .order("created_at", { ascending: false })
     .returns<SoundRow[]>();
 
-  const sounds = soundRows ?? [];
+  const sounds = (soundRows ?? []).filter((sound) => isAdmin || !sound.hidden);
 
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -102,9 +112,22 @@ export default async function SoundboardPage({
             const isOwner = sound.uploaded_by === user.id;
 
             return (
-              <Card key={sound.id}>
+              <Card key={sound.id} className={sound.hidden ? "opacity-60" : undefined}>
                 <CardHeader>
-                  <CardTitle className="text-base">{sound.title}</CardTitle>
+                  <CardTitle className="flex items-center justify-between gap-2 text-base">
+                    <span>{sound.title}</span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {sound.hidden && <HiddenBadge />}
+                      {isAdmin && (
+                        <HideToggleButton
+                          table="sounds"
+                          id={sound.id}
+                          hidden={sound.hidden}
+                          redirectTo="/frat-history/soundboard"
+                        />
+                      )}
+                    </span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <audio controls preload="none" className="w-full" src={publicUrlData.publicUrl}>

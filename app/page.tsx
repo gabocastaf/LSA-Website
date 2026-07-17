@@ -19,6 +19,7 @@ type EventRow = {
   event_date: string;
   created_at: string;
   pinned: boolean;
+  hidden: boolean;
   attendance: "optional" | "mandatory";
   creator: AuthorRow | null;
 };
@@ -29,6 +30,7 @@ type AwardRow = {
   reason: string | null;
   created_at: string;
   pinned: boolean;
+  hidden: boolean;
   recipient: AuthorRow | null;
   giver: AuthorRow | null;
 };
@@ -38,6 +40,7 @@ type QuoteRow = {
   quote_text: string;
   created_at: string;
   pinned: boolean;
+  hidden: boolean;
   attributed: AuthorRow | null;
   submitter: AuthorRow | null;
 };
@@ -48,6 +51,7 @@ type BeefRow = {
   target: string | null;
   created_at: string;
   pinned: boolean;
+  hidden: boolean;
   creator: AuthorRow | null;
 };
 
@@ -57,6 +61,7 @@ type PhotoRow = {
   caption: string | null;
   created_at: string;
   pinned: boolean;
+  hidden: boolean;
   uploader: AuthorRow | null;
 };
 
@@ -66,6 +71,7 @@ type SoundRow = {
   title: string;
   created_at: string;
   pinned: boolean;
+  hidden: boolean;
   uploader: AuthorRow | null;
 };
 
@@ -74,6 +80,7 @@ type ThreadRow = {
   body: string;
   created_at: string;
   pinned: boolean;
+  hidden: boolean;
   author: AuthorRow | null;
 };
 
@@ -93,6 +100,7 @@ type MembershipEventRow = {
   to_value: string | null;
   created_at: string;
   pinned: boolean;
+  hidden: boolean;
   actor: AuthorRow | null;
 };
 
@@ -135,49 +143,49 @@ export default async function DashboardPage() {
     supabase
       .from("events")
       .select(
-        "id, title, event_date, created_at, pinned, attendance, creator:profiles!events_created_by_fkey(id, display_name, email, role)",
+        "id, title, event_date, created_at, pinned, hidden, attendance, creator:profiles!events_created_by_fkey(id, display_name, email, role)",
       )
       .order("event_date", { ascending: true })
       .returns<EventRow[]>(),
     supabase
       .from("awards")
       .select(
-        "id, title, reason, created_at, pinned, recipient:profiles!awards_recipient_id_fkey(id, display_name, email, role), giver:profiles!awards_given_by_fkey(id, display_name, email, role)",
+        "id, title, reason, created_at, pinned, hidden, recipient:profiles!awards_recipient_id_fkey(id, display_name, email, role), giver:profiles!awards_given_by_fkey(id, display_name, email, role)",
       )
       .order("created_at", { ascending: false })
       .returns<AwardRow[]>(),
     supabase
       .from("quotes")
       .select(
-        "id, quote_text, created_at, pinned, attributed:profiles!quotes_attributed_to_fkey(id, display_name, email, role), submitter:profiles!quotes_submitted_by_fkey(id, display_name, email, role)",
+        "id, quote_text, created_at, pinned, hidden, attributed:profiles!quotes_attributed_to_fkey(id, display_name, email, role), submitter:profiles!quotes_submitted_by_fkey(id, display_name, email, role)",
       )
       .order("created_at", { ascending: false })
       .returns<QuoteRow[]>(),
     supabase
       .from("beefs")
       .select(
-        "id, title, target, created_at, pinned, creator:profiles!beefs_created_by_fkey(id, display_name, email, role)",
+        "id, title, target, created_at, pinned, hidden, creator:profiles!beefs_created_by_fkey(id, display_name, email, role)",
       )
       .order("created_at", { ascending: false })
       .returns<BeefRow[]>(),
     supabase
       .from("photos")
       .select(
-        "id, storage_path, caption, created_at, pinned, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email, role)",
+        "id, storage_path, caption, created_at, pinned, hidden, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email, role)",
       )
       .order("created_at", { ascending: false })
       .returns<PhotoRow[]>(),
     supabase
       .from("sounds")
       .select(
-        "id, storage_path, title, created_at, pinned, uploader:profiles!sounds_uploaded_by_fkey(id, display_name, email, role)",
+        "id, storage_path, title, created_at, pinned, hidden, uploader:profiles!sounds_uploaded_by_fkey(id, display_name, email, role)",
       )
       .order("created_at", { ascending: false })
       .returns<SoundRow[]>(),
     supabase
       .from("thread_messages")
       .select(
-        "id, body, created_at, pinned, author:profiles!thread_messages_author_id_fkey(id, display_name, email, role)",
+        "id, body, created_at, pinned, hidden, author:profiles!thread_messages_author_id_fkey(id, display_name, email, role)",
       )
       .order("created_at", { ascending: false })
       .limit(20)
@@ -189,7 +197,7 @@ export default async function DashboardPage() {
     supabase
       .from("membership_events")
       .select(
-        "id, subject_label, type, from_value, to_value, created_at, pinned, actor:profiles!membership_events_actor_id_fkey(id, display_name, email, role)",
+        "id, subject_label, type, from_value, to_value, created_at, pinned, hidden, actor:profiles!membership_events_actor_id_fkey(id, display_name, email, role)",
       )
       .order("created_at", { ascending: false })
       .returns<MembershipEventRow[]>(),
@@ -201,7 +209,11 @@ export default async function DashboardPage() {
   // component, so reading the clock here is safe despite the purity lint rule.
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
-  const nextEvent = events.find((event) => new Date(event.event_date).getTime() >= now) ?? null;
+  // A hidden event (e.g. test data) shouldn't drive the countdown banner for
+  // anyone, admin or not — unlike the isAdmin-aware visibleItems filter below,
+  // which still surfaces hidden events as dimmed feed cards for admins.
+  const nextEvent =
+    events.find((event) => !event.hidden && new Date(event.event_date).getTime() >= now) ?? null;
 
   const eventItems: FeedItem[] = events.map((event) => ({
     id: event.id,
@@ -209,6 +221,7 @@ export default async function DashboardPage() {
     table: "events",
     createdAt: event.created_at,
     pinned: event.pinned,
+    hidden: event.hidden,
     author: toAuthor(event.creator),
     heading: "New Event",
     title: event.title,
@@ -226,6 +239,7 @@ export default async function DashboardPage() {
     table: "awards",
     createdAt: award.created_at,
     pinned: award.pinned,
+    hidden: award.hidden,
     author: toAuthor(award.giver),
     heading: "New Trophy",
     title: `${award.title} — ${award.recipient?.display_name ?? award.recipient?.email ?? "Unknown"}`,
@@ -239,6 +253,7 @@ export default async function DashboardPage() {
     table: "quotes",
     createdAt: quote.created_at,
     pinned: quote.pinned,
+    hidden: quote.hidden,
     author: toAuthor(quote.submitter),
     heading: "New Quote",
     title: `“${quote.quote_text}”`,
@@ -252,6 +267,7 @@ export default async function DashboardPage() {
     table: "beefs",
     createdAt: beef.created_at,
     pinned: beef.pinned,
+    hidden: beef.hidden,
     author: toAuthor(beef.creator),
     heading: "New Beef",
     title: beef.title,
@@ -267,6 +283,7 @@ export default async function DashboardPage() {
       table: "photos",
       createdAt: photo.created_at,
       pinned: photo.pinned,
+      hidden: photo.hidden,
       author: toAuthor(photo.uploader),
       heading: "New Photo",
       title: photo.caption ?? "Untitled evidence",
@@ -283,6 +300,7 @@ export default async function DashboardPage() {
       table: "sounds",
       createdAt: sound.created_at,
       pinned: sound.pinned,
+      hidden: sound.hidden,
       author: toAuthor(sound.uploader),
       heading: "New Sound",
       title: sound.title,
@@ -297,6 +315,7 @@ export default async function DashboardPage() {
     table: "thread_messages",
     createdAt: message.created_at,
     pinned: message.pinned,
+    hidden: message.hidden,
     author: toAuthor(message.author),
     heading: "New Banter",
     title: message.body,
@@ -309,6 +328,7 @@ export default async function DashboardPage() {
     table: null,
     createdAt: profile.created_at,
     pinned: false,
+    hidden: false,
     author: toAuthor(profile),
     heading: "New Member",
     title: `${profile.display_name ?? profile.email} pledged. God help them.`,
@@ -325,6 +345,7 @@ export default async function DashboardPage() {
       table: "membership_events" as const,
       createdAt: event.created_at,
       pinned: event.pinned,
+      hidden: event.hidden,
       author: toAuthor(event.actor),
       href: "/roster",
     };
@@ -380,8 +401,12 @@ export default async function DashboardPage() {
     ...membershipItems,
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  const pinnedItems = allItems.filter((item) => item.pinned);
-  const streamItems = allItems.filter((item) => !item.pinned);
+  // Non-admins never see hidden items; admins see them inline (dimmed, with a
+  // Hidden badge and unhide control) so test data or moderated posts can
+  // still be found and reversed.
+  const visibleItems = isAdmin ? allItems : allItems.filter((item) => !item.hidden);
+  const pinnedItems = visibleItems.filter((item) => item.pinned);
+  const streamItems = visibleItems.filter((item) => !item.pinned);
 
   return (
     <div className="min-h-screen">

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { RankName } from "@/components/rank-name";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { postMessage } from "@/app/thread/actions";
 
 type Profile = {
@@ -22,6 +23,7 @@ type ThreadMessage = {
   body: string;
   created_at: string;
   author_id: string | null;
+  hidden: boolean;
   author: { display_name: string | null; email: string | null; role: string | null } | null;
 };
 
@@ -36,10 +38,12 @@ export function ThreadFeed({
   initialMessages,
   profiles,
   viewerId,
+  isAdmin,
 }: {
   initialMessages: ThreadMessage[];
   profiles: Profile[];
   viewerId: string;
+  isAdmin: boolean;
 }) {
   const [messages, setMessages] = useState<ThreadMessage[]>(initialMessages);
   const [body, setBody] = useState("");
@@ -71,6 +75,7 @@ export function ThreadFeed({
               body: row.body,
               created_at: row.created_at,
               author_id: row.author_id,
+              hidden: false,
               author: profile
                 ? { display_name: profile.display_name, email: profile.email, role: profile.role }
                 : null,
@@ -120,6 +125,7 @@ export function ThreadFeed({
         body: row.body,
         created_at: row.created_at,
         author_id: row.author_id,
+        hidden: false,
         author: profile
           ? { display_name: profile.display_name, email: profile.email, role: profile.role }
           : null,
@@ -144,23 +150,41 @@ export function ThreadFeed({
               className={cn(
                 "rounded-lg px-2 py-1 text-sm",
                 message.author_id === viewerId && "bg-background",
+                message.hidden && "opacity-60",
               )}
             >
-              <span className="font-medium">
-                <RankName
-                  profile={{
-                    display_name: message.author?.display_name ?? null,
-                    email: message.author?.email ?? null,
-                    role: message.author?.role ?? null,
-                  }}
-                />
-              </span>{" "}
-              <span className="text-xs text-muted-foreground">
-                {new Date(message.created_at).toLocaleTimeString(undefined, {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span>
+                  <span className="font-medium">
+                    <RankName
+                      profile={{
+                        display_name: message.author?.display_name ?? null,
+                        email: message.author?.email ?? null,
+                        role: message.author?.role ?? null,
+                      }}
+                    />
+                  </span>{" "}
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(message.created_at).toLocaleTimeString(undefined, {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </span>
+                {(message.hidden || isAdmin) && (
+                  <span className="flex shrink-0 items-center gap-1">
+                    {message.hidden && <HiddenBadge />}
+                    {isAdmin && (
+                      <HideToggleButton
+                        table="thread_messages"
+                        id={message.id}
+                        hidden={message.hidden}
+                        redirectTo="/thread"
+                      />
+                    )}
+                  </span>
+                )}
+              </div>
               <p className="text-foreground">{message.body}</p>
             </div>
           ))

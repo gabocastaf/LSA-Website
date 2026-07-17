@@ -20,6 +20,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RankName } from "@/components/rank-name";
+import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { togglePin } from "@/app/actions";
 
 export type FeedKind =
@@ -53,6 +54,7 @@ export type FeedItem = {
   table: PinnableTable | null;
   createdAt: string;
   pinned: boolean;
+  hidden: boolean;
   author: {
     display_name: string | null;
     email: string | null;
@@ -85,7 +87,7 @@ export function FeedItemCard({ item, isAdmin }: { item: FeedItem; isAdmin: boole
   const Icon = KIND_ICON[item.kind];
 
   return (
-    <Card>
+    <Card className={item.hidden ? "opacity-60" : undefined}>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           <Link href={item.href} className="flex min-w-0 items-center gap-2 hover:underline">
@@ -93,19 +95,23 @@ export function FeedItemCard({ item, isAdmin }: { item: FeedItem; isAdmin: boole
             <span className="truncate">{item.heading}</span>
           </Link>
           {isAdmin && item.table && (
-            <form action={togglePin}>
-              <input type="hidden" name="table" value={item.table} />
-              <input type="hidden" name="id" value={item.id} />
-              <input type="hidden" name="pinned" value={(!item.pinned).toString()} />
-              <Button
-                type="submit"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={item.pinned ? "Unpin" : "Pin to top"}
-              >
-                {item.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-              </Button>
-            </form>
+            <span className="flex shrink-0 items-center gap-1">
+              {item.hidden && <HiddenBadge />}
+              <HideToggleButton table={item.table} id={item.id} hidden={item.hidden} redirectTo="/" />
+              <form action={togglePin}>
+                <input type="hidden" name="table" value={item.table} />
+                <input type="hidden" name="id" value={item.id} />
+                <input type="hidden" name="pinned" value={(!item.pinned).toString()} />
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={item.pinned ? "Unpin" : "Pin to top"}
+                >
+                  {item.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+                </Button>
+              </form>
+            </span>
           )}
         </CardTitle>
       </CardHeader>

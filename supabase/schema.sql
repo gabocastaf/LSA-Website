@@ -55,6 +55,10 @@ create table if not exists public.events (
 -- Lets an admin pin an event to the top of the home feed (e.g. formal, rush week).
 alter table public.events add column if not exists pinned boolean not null default false;
 
+-- Lets an admin hide test/junk/moderated events from the feed and this page
+-- without deleting them (reversible, unlike deleteEvent).
+alter table public.events add column if not exists hidden boolean not null default false;
+
 alter table public.events add column if not exists attendance text not null default 'optional' check (attendance in ('optional', 'mandatory'));
 
 alter table public.events enable row level security;
@@ -142,6 +146,9 @@ create table if not exists public.awards (
 -- Lets an admin pin a trophy to the top of the home feed.
 alter table public.awards add column if not exists pinned boolean not null default false;
 
+-- Lets an admin hide a trophy from the feed and Trophy Cabinet without deleting it.
+alter table public.awards add column if not exists hidden boolean not null default false;
+
 -- recipient_id started out not-null + on delete cascade, unlike every other
 -- author-type FK in this file — that meant deleting a member's account would
 -- silently delete every trophy they'd ever *received*, not just their own
@@ -180,6 +187,9 @@ create table if not exists public.quotes (
 -- Lets an admin pin a quote to the top of the home feed.
 alter table public.quotes add column if not exists pinned boolean not null default false;
 
+-- Lets an admin hide a quote from the feed and Kangaroo Court without deleting it.
+alter table public.quotes add column if not exists hidden boolean not null default false;
+
 alter table public.quotes enable row level security;
 
 drop policy if exists "quotes_select_authenticated" on public.quotes;
@@ -209,6 +219,9 @@ create table if not exists public.beefs (
 
 -- Lets an admin pin a beef to the top of the home feed.
 alter table public.beefs add column if not exists pinned boolean not null default false;
+
+-- Lets an admin hide a beef from the feed and Beef Tracker without deleting it.
+alter table public.beefs add column if not exists hidden boolean not null default false;
 
 -- Optional link to a real member, alongside the free-text `target` column.
 -- `target` stays free text on purpose (a beef can be with "the guy from
@@ -276,6 +289,10 @@ create table if not exists public.photos (
 
 -- Lets an admin pin a photo to the top of the home feed.
 alter table public.photos add column if not exists pinned boolean not null default false;
+
+-- Lets an admin hide a photo from the feed and Photo Gallery without deleting
+-- it (e.g. test uploads before real users join, or moderating uploads later).
+alter table public.photos add column if not exists hidden boolean not null default false;
 
 alter table public.photos enable row level security;
 
@@ -372,6 +389,9 @@ create table if not exists public.sounds (
 -- Lets an admin pin a sound clip to the top of the home feed.
 alter table public.sounds add column if not exists pinned boolean not null default false;
 
+-- Lets an admin hide a sound clip from the feed and Soundboard without deleting it.
+alter table public.sounds add column if not exists hidden boolean not null default false;
+
 alter table public.sounds enable row level security;
 
 drop policy if exists "sounds_select_authenticated" on public.sounds;
@@ -418,6 +438,8 @@ create table if not exists public.thread_messages (
   body text not null,
   author_id uuid references public.profiles (id) on delete set null,
   pinned boolean not null default false,
+  -- Lets an admin hide a message from the feed and the Thread without deleting it.
+  hidden boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -472,6 +494,8 @@ create table if not exists public.membership_events (
   from_value text,
   to_value text,
   pinned boolean not null default false,
+  -- Lets an admin hide a membership event (e.g. a test kick/promotion) from the feed.
+  hidden boolean not null default false,
   created_at timestamptz not null default now()
 );
 

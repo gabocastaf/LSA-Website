@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { deletePhoto } from "./actions";
 import { PhotoUploadForm } from "./photo-upload-form";
 
@@ -11,6 +12,7 @@ type PhotoRow = {
   storage_path: string;
   caption: string | null;
   created_at: string;
+  hidden: boolean;
   uploaded_by: string | null;
   uploader: { id: string; display_name: string | null; email: string } | null;
   tags: { profile: { id: string; display_name: string | null; email: string } | null }[];
@@ -32,6 +34,14 @@ export default async function PhotoGalleryPage({
     redirect("/login");
   }
 
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const isAdmin = viewerProfile?.role === "admin";
+
   const { data: members } = await supabase
     .from("profiles")
     .select("id, display_name, email")
@@ -40,13 +50,13 @@ export default async function PhotoGalleryPage({
   const { data: photoRows } = await supabase
     .from("photos")
     .select(
-      "id, storage_path, caption, created_at, uploaded_by, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email), tags:photo_tags(profile:profiles(id, display_name, email))",
+      "id, storage_path, caption, created_at, hidden, uploaded_by, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email), tags:photo_tags(profile:profiles(id, display_name, email))",
     )
     .order("created_at", { ascending: false })
     .returns<PhotoRow[]>();
 
   const roster = members ?? [];
-  const photos = photoRows ?? [];
+  const photos = (photoRows ?? []).filter((photo) => isAdmin || !photo.hidden);
 
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -84,7 +94,7 @@ export default async function PhotoGalleryPage({
             const isOwner = photo.uploaded_by === user.id;
 
             return (
-              <Card key={photo.id}>
+              <Card key={photo.id} className={photo.hidden ? "opacity-60" : undefined}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={publicUrlData.publicUrl}
@@ -93,7 +103,20 @@ export default async function PhotoGalleryPage({
                   className="aspect-square w-full object-cover"
                 />
                 <CardContent className="space-y-1 text-sm">
-                  {photo.caption && <p className="font-medium">{photo.caption}</p>}
+                  <div className="flex items-center justify-between gap-2">
+                    {photo.caption && <p className="font-medium">{photo.caption}</p>}
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {photo.hidden && <HiddenBadge />}
+                      {isAdmin && (
+                        <HideToggleButton
+                          table="photos"
+                          id={photo.id}
+                          hidden={photo.hidden}
+                          redirectTo="/frat-history/photo-gallery"
+                        />
+                      )}
+                    </span>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {photo.uploader?.display_name ?? photo.uploader?.email ?? "Unknown"} ·{" "}
                     {new Date(photo.created_at).toLocaleDateString()}

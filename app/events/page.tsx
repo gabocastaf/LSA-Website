@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { createEvent, setRsvp, deleteEvent } from "./actions";
 
 const selectClassName =
@@ -30,6 +31,7 @@ type EventRow = {
   location: string | null;
   description: string | null;
   attendance: "optional" | "mandatory";
+  hidden: boolean;
   created_by: string | null;
   creator: { id: string; display_name: string | null; email: string } | null;
 };
@@ -66,7 +68,7 @@ export default async function EventsPage({
   const { data: eventRows } = await supabase
     .from("events")
     .select(
-      "id, title, event_date, location, description, attendance, created_by, creator:profiles!events_created_by_fkey(id, display_name, email)",
+      "id, title, event_date, location, description, attendance, hidden, created_by, creator:profiles!events_created_by_fkey(id, display_name, email)",
     )
     .order("event_date", { ascending: true })
     .returns<EventRow[]>();
@@ -78,7 +80,11 @@ export default async function EventsPage({
     )
     .returns<RsvpRow[]>();
 
-  const events = eventRows ?? [];
+  const isAdmin = viewerProfile?.role === "admin";
+
+  // Non-admins never see events an admin has hidden (e.g. test data);
+  // admins see them dimmed with an unhide control.
+  const events = (eventRows ?? []).filter((event) => isAdmin || !event.hidden);
   const rsvps = rsvpRows ?? [];
   const rsvpsByEvent = new Map<string, RsvpRow[]>();
   for (const rsvp of rsvps) {
@@ -96,7 +102,6 @@ export default async function EventsPage({
     .filter((event) => new Date(event.event_date).getTime() < now)
     .reverse();
 
-  const isAdmin = viewerProfile?.role === "admin";
   const isCalendarView = view === "calendar";
 
   return (
@@ -248,7 +253,7 @@ function EventCard({
   const canManage = isAdmin || event.created_by === viewerId;
 
   return (
-    <Card id={`event-${event.id}`}>
+    <Card id={`event-${event.id}`} className={event.hidden ? "opacity-60" : undefined}>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           <span>{event.title}</span>
@@ -267,6 +272,10 @@ function EventCard({
               <span className="inline-flex w-fit items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 Past
               </span>
+            )}
+            {event.hidden && <HiddenBadge />}
+            {isAdmin && (
+              <HideToggleButton table="events" id={event.id} hidden={event.hidden} redirectTo="/events" />
             )}
           </span>
         </CardTitle>

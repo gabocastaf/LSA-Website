@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { createBeef, toggleBeefStatus } from "./actions";
 
 const selectClassName =
@@ -19,6 +20,7 @@ type BeefRow = {
   reason: string | null;
   status: "active" | "squashed";
   created_at: string;
+  hidden: boolean;
   created_by: string | null;
   creator: { id: string; display_name: string | null; email: string } | null;
 };
@@ -53,6 +55,14 @@ export default async function BeefTrackerPage({
     redirect("/login");
   }
 
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const isAdmin = viewerProfile?.role === "admin";
+
   const { data: members } = await supabase
     .from("profiles")
     .select("id, display_name, email")
@@ -61,13 +71,13 @@ export default async function BeefTrackerPage({
   const { data: beefRows } = await supabase
     .from("beefs")
     .select(
-      "id, title, target, reason, status, created_at, created_by, creator:profiles!beefs_created_by_fkey(id, display_name, email)",
+      "id, title, target, reason, status, created_at, hidden, created_by, creator:profiles!beefs_created_by_fkey(id, display_name, email)",
     )
     .order("created_at", { ascending: false })
     .returns<BeefRow[]>();
 
   const roster = members ?? [];
-  const beefs = beefRows ?? [];
+  const beefs = (beefRows ?? []).filter((beef) => isAdmin || !beef.hidden);
   const activeBeefs = beefs.filter((beef) => beef.status === "active");
   const squashedBeefs = beefs.filter((beef) => beef.status === "squashed");
 
@@ -131,7 +141,7 @@ export default async function BeefTrackerPage({
       ) : (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {activeBeefs.map((beef) => (
-            <BeefCard key={beef.id} beef={beef} viewerId={user.id} />
+            <BeefCard key={beef.id} beef={beef} viewerId={user.id} isAdmin={isAdmin} />
           ))}
         </div>
       )}
@@ -141,7 +151,7 @@ export default async function BeefTrackerPage({
           <h2 className="mt-10 text-lg font-semibold tracking-tight">Squashed Beefs</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {squashedBeefs.map((beef) => (
-              <BeefCard key={beef.id} beef={beef} viewerId={user.id} />
+              <BeefCard key={beef.id} beef={beef} viewerId={user.id} isAdmin={isAdmin} />
             ))}
           </div>
         </>
@@ -150,16 +160,35 @@ export default async function BeefTrackerPage({
   );
 }
 
-function BeefCard({ beef, viewerId }: { beef: BeefRow; viewerId: string }) {
+function BeefCard({
+  beef,
+  viewerId,
+  isAdmin,
+}: {
+  beef: BeefRow;
+  viewerId: string;
+  isAdmin: boolean;
+}) {
   const isOwner = beef.created_by === viewerId;
   const nextStatus = beef.status === "active" ? "squashed" : "active";
 
   return (
-    <Card>
+    <Card className={beef.hidden ? "opacity-60" : undefined}>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           <span>{beef.title}</span>
-          <StatusBadge status={beef.status} />
+          <span className="flex items-center gap-1.5">
+            <StatusBadge status={beef.status} />
+            {beef.hidden && <HiddenBadge />}
+            {isAdmin && (
+              <HideToggleButton
+                table="beefs"
+                id={beef.id}
+                hidden={beef.hidden}
+                redirectTo="/frat-history/beef-tracker"
+              />
+            )}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">

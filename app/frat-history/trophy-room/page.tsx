@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { giveAward } from "./actions";
 
 const selectClassName =
@@ -16,6 +17,7 @@ type AwardRow = {
   title: string;
   reason: string | null;
   created_at: string;
+  hidden: boolean;
   recipient: { id: string; display_name: string | null; email: string } | null;
   giver: { id: string; display_name: string | null; email: string } | null;
 };
@@ -36,6 +38,14 @@ export default async function TrophyRoomPage({
     redirect("/login");
   }
 
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const isAdmin = viewerProfile?.role === "admin";
+
   const { data: members } = await supabase
     .from("profiles")
     .select("id, display_name, email")
@@ -44,13 +54,13 @@ export default async function TrophyRoomPage({
   const { data: awardRows } = await supabase
     .from("awards")
     .select(
-      "id, title, reason, created_at, recipient:profiles!awards_recipient_id_fkey(id, display_name, email), giver:profiles!awards_given_by_fkey(id, display_name, email)",
+      "id, title, reason, created_at, hidden, recipient:profiles!awards_recipient_id_fkey(id, display_name, email), giver:profiles!awards_given_by_fkey(id, display_name, email)",
     )
     .order("created_at", { ascending: false })
     .returns<AwardRow[]>();
 
   const roster = members ?? [];
-  const awards = awardRows ?? [];
+  const awards = (awardRows ?? []).filter((award) => isAdmin || !award.hidden);
 
   return (
     <main className="mx-auto max-w-5xl p-4">
@@ -111,10 +121,21 @@ export default async function TrophyRoomPage({
       ) : (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {awards.map((award) => (
-            <Card key={award.id}>
+            <Card key={award.id} className={award.hidden ? "opacity-60" : undefined}>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between gap-2">
                   <span>{award.title}</span>
+                  <span className="flex items-center gap-1.5">
+                    {award.hidden && <HiddenBadge />}
+                    {isAdmin && (
+                      <HideToggleButton
+                        table="awards"
+                        id={award.id}
+                        hidden={award.hidden}
+                        redirectTo="/frat-history/trophy-room"
+                      />
+                    )}
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">

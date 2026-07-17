@@ -16,6 +16,7 @@ type ThreadMessageRow = {
   body: string;
   created_at: string;
   author_id: string | null;
+  hidden: boolean;
   author: AuthorRow | null;
 };
 
@@ -36,10 +37,12 @@ export default async function ThreadPage() {
     .eq("id", user.id)
     .single();
 
+  const isAdmin = viewerProfile?.role === "admin";
+
   const { data: messageRows } = await supabase
     .from("thread_messages")
     .select(
-      "id, body, created_at, author_id, author:profiles!thread_messages_author_id_fkey(id, display_name, email, role)",
+      "id, body, created_at, author_id, hidden, author:profiles!thread_messages_author_id_fkey(id, display_name, email, role)",
     )
     .order("created_at", { ascending: true })
     .returns<ThreadMessageRow[]>();
@@ -47,6 +50,10 @@ export default async function ThreadPage() {
   const { data: profileRows } = await supabase
     .from("profiles")
     .select("id, display_name, email, role");
+
+  // Non-admins never see hidden messages; admins see them dimmed with an
+  // unhide control (see toggleHide in app/actions.ts).
+  const messages = (messageRows ?? []).filter((message) => isAdmin || !message.hidden);
 
   return (
     <div className="min-h-screen">
@@ -58,9 +65,10 @@ export default async function ThreadPage() {
         </p>
 
         <ThreadFeed
-          initialMessages={messageRows ?? []}
+          initialMessages={messages}
           profiles={profileRows ?? []}
           viewerId={user.id}
+          isAdmin={isAdmin}
         />
       </main>
     </div>

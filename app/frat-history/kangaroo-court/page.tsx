@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { submitQuote, adjustDemerits } from "./actions";
 
 const selectClassName =
@@ -16,6 +17,7 @@ type QuoteRow = {
   id: string;
   quote_text: string;
   created_at: string;
+  hidden: boolean;
   attributed: { id: string; display_name: string | null; email: string } | null;
   submitter: { id: string; display_name: string | null; email: string } | null;
 };
@@ -59,13 +61,13 @@ export default async function KangarooCourtPage({
   const { data: quoteRows } = await supabase
     .from("quotes")
     .select(
-      "id, quote_text, created_at, attributed:profiles!quotes_attributed_to_fkey(id, display_name, email), submitter:profiles!quotes_submitted_by_fkey(id, display_name, email)",
+      "id, quote_text, created_at, hidden, attributed:profiles!quotes_attributed_to_fkey(id, display_name, email), submitter:profiles!quotes_submitted_by_fkey(id, display_name, email)",
     )
     .order("created_at", { ascending: false })
     .returns<QuoteRow[]>();
 
   const roster = members ?? [];
-  const quotes = quoteRows ?? [];
+  const quotes = (quoteRows ?? []).filter((quote) => isAdmin || !quote.hidden);
 
   let allMembers: MemberRow[] = [];
   if (isAdmin) {
@@ -125,9 +127,22 @@ export default async function KangarooCourtPage({
       ) : (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {quotes.map((quote) => (
-            <Card key={quote.id}>
+            <Card key={quote.id} className={quote.hidden ? "opacity-60" : undefined}>
               <CardContent className="space-y-2 pt-6 text-sm">
-                <p className="text-base font-medium italic">&ldquo;{quote.quote_text}&rdquo;</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-base font-medium italic">&ldquo;{quote.quote_text}&rdquo;</p>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {quote.hidden && <HiddenBadge />}
+                    {isAdmin && (
+                      <HideToggleButton
+                        table="quotes"
+                        id={quote.id}
+                        hidden={quote.hidden}
+                        redirectTo="/frat-history/kangaroo-court"
+                      />
+                    )}
+                  </span>
+                </div>
                 <p>
                   <span className="text-muted-foreground">— </span>
                   <span className="font-medium">
