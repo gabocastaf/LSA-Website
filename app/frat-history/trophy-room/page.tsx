@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
+import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
 import { giveAward } from "./actions";
 
 const selectClassName =
@@ -133,6 +134,14 @@ export default async function TrophyRoomPage({
                         id={award.id}
                         hidden={award.hidden}
                         redirectTo="/frat-history/trophy-room"
+                      />
+                    )}
+                    {isAdmin && award.hidden && (
+                      <DeleteFeedItemButton
+                        table="awards"
+                        id={award.id}
+                        redirectTo="/frat-history/trophy-room"
+                        itemLabel={award.title}
                       />
                     )}
                   </span>

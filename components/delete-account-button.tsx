@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 
-// The one destructive, irreversible action in the app — everything else
-// (photo delete, beef squash, kick) is either instantly undoable or just a
-// status flip. This is also the only native confirm() in the codebase,
-// deliberately scoped to just this button.
+// One of a small set of irreversible actions in the app (see also
+// deleteFeedItem in app/actions.ts, gated to already-hidden feed items).
+// Uses a native confirm() like those do, deliberately scoped to just this
+// button.
 export function DeleteAccountButton({ name }: { name: string }) {
   return (
     <Button

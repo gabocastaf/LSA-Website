@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
+import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
 import { createBeef, toggleBeefStatus } from "./actions";
 
 const selectClassName =
@@ -186,6 +187,14 @@ function BeefCard({
                 id={beef.id}
                 hidden={beef.hidden}
                 redirectTo="/frat-history/beef-tracker"
+              />
+            )}
+            {isAdmin && beef.hidden && (
+              <DeleteFeedItemButton
+                table="beefs"
+                id={beef.id}
+                redirectTo="/frat-history/beef-tracker"
+                itemLabel={beef.title}
               />
             )}
           </span>

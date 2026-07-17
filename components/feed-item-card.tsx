@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RankName } from "@/components/rank-name";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
+import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
 import { togglePin } from "@/app/actions";
 
 export type FeedKind =
@@ -55,6 +56,7 @@ export type FeedItem = {
   createdAt: string;
   pinned: boolean;
   hidden: boolean;
+  storagePath?: string | null;
   author: {
     display_name: string | null;
     email: string | null;
@@ -98,6 +100,15 @@ export function FeedItemCard({ item, isAdmin }: { item: FeedItem; isAdmin: boole
             <span className="flex shrink-0 items-center gap-1">
               {item.hidden && <HiddenBadge />}
               <HideToggleButton table={item.table} id={item.id} hidden={item.hidden} redirectTo="/" />
+              {item.hidden && (
+                <DeleteFeedItemButton
+                  table={item.table}
+                  id={item.id}
+                  storagePath={item.storagePath}
+                  redirectTo="/"
+                  itemLabel={item.title}
+                />
+              )}
               <form action={togglePin}>
                 <input type="hidden" name="table" value={item.table} />
                 <input type="hidden" name="id" value={item.id} />

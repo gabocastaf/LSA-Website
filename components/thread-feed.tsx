@@ -9,6 +9,7 @@ import { RankName } from "@/components/rank-name";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
+import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
 import { postMessage } from "@/app/thread/actions";
 
 type Profile = {
@@ -180,6 +181,14 @@ export function ThreadFeed({
                         id={message.id}
                         hidden={message.hidden}
                         redirectTo="/thread"
+                      />
+                    )}
+                    {isAdmin && message.hidden && (
+                      <DeleteFeedItemButton
+                        table="thread_messages"
+                        id={message.id}
+                        redirectTo="/thread"
+                        itemLabel="this message"
                       />
                     )}
                   </span>

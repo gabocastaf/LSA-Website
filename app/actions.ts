@@ -100,3 +100,52 @@ export async function toggleHide(formData: FormData) {
   revalidatePath(redirectTo);
   redirect(redirectTo);
 }
+
+// Only photos and sounds have a backing storage object to clean up alongside
+// the row.
+const STORAGE_BUCKET_BY_TABLE: Partial<Record<FeedTable, string>> = {
+  photos: "photos",
+  sounds: "sounds",
+};
+
+// Permanent delete for admins — deliberately gated to already-hidden rows
+// (checked server-side, not just by hiding the button in the UI) so this
+// stays a two-step "hide, confirm it's junk, then delete" flow rather than a
+// one-click way to permanently remove live content.
+export async function deleteFeedItem(formData: FormData) {
+  const table = formData.get("table")?.toString();
+  const id = formData.get("id")?.toString();
+  const storagePath = formData.get("storagePath")?.toString();
+  const redirectTo = formData.get("redirectTo")?.toString() || "/";
+
+  await requireAdmin();
+
+  if (!table || !(FEED_TABLES as readonly string[]).includes(table) || !id) {
+    redirect(redirectTo);
+  }
+
+  const admin = createAdminClient();
+
+  const { data: row } = await admin
+    .from(table as FeedTable)
+    .select("hidden")
+    .eq("id", id)
+    .single();
+
+  if (!row?.hidden) {
+    redirect(redirectTo);
+  }
+
+  await admin.from(table as FeedTable).delete().eq("id", id);
+
+  const bucket = STORAGE_BUCKET_BY_TABLE[table as FeedTable];
+  if (bucket && storagePath) {
+    // Best-effort, same reasoning as deletePhoto/deleteSound: the DB row is
+    // the source of truth for what's "in" the gallery/soundboard, so a
+    // leftover storage object here isn't worth failing the request over.
+    await admin.storage.from(bucket).remove([storagePath]);
+  }
+
+  revalidatePath(redirectTo);
+  redirect(redirectTo);
+}

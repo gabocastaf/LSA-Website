@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
+import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
 import { submitQuote, adjustDemerits } from "./actions";
 
 const selectClassName =
@@ -139,6 +140,14 @@ export default async function KangarooCourtPage({
                         id={quote.id}
                         hidden={quote.hidden}
                         redirectTo="/frat-history/kangaroo-court"
+                      />
+                    )}
+                    {isAdmin && quote.hidden && (
+                      <DeleteFeedItemButton
+                        table="quotes"
+                        id={quote.id}
+                        redirectTo="/frat-history/kangaroo-court"
+                        itemLabel={`the quote "${quote.quote_text.slice(0, 40)}${quote.quote_text.length > 40 ? "…" : ""}"`}
                       />
                     )}
                   </span>

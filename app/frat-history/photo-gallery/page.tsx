@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
+import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
 import { deletePhoto } from "./actions";
 import { PhotoUploadForm } from "./photo-upload-form";
 
@@ -113,6 +114,15 @@ export default async function PhotoGalleryPage({
                           id={photo.id}
                           hidden={photo.hidden}
                           redirectTo="/frat-history/photo-gallery"
+                        />
+                      )}
+                      {isAdmin && photo.hidden && (
+                        <DeleteFeedItemButton
+                          table="photos"
+                          id={photo.id}
+                          storagePath={photo.storage_path}
+                          redirectTo="/frat-history/photo-gallery"
+                          itemLabel={photo.caption ?? "this photo"}
                         />
                       )}
                     </span>

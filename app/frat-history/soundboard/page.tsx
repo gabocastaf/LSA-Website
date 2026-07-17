@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
+import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
 import { uploadSound, deleteSound } from "./actions";
 
 type SoundRow = {
@@ -124,6 +125,15 @@ export default async function SoundboardPage({
                           id={sound.id}
                           hidden={sound.hidden}
                           redirectTo="/frat-history/soundboard"
+                        />
+                      )}
+                      {isAdmin && sound.hidden && (
+                        <DeleteFeedItemButton
+                          table="sounds"
+                          id={sound.id}
+                          storagePath={sound.storage_path}
+                          redirectTo="/frat-history/soundboard"
+                          itemLabel={sound.title}
                         />
                       )}
                     </span>
