@@ -22,6 +22,7 @@ const NAV_LINKS = [
   { href: "/kangaroo-court", label: "Kangaroo Court" },
   { href: "/photo-gallery", label: "Photo Gallery" },
   { href: "/dues", label: "Dues" },
+  { href: "/soundboard", label: "Soundboard" },
 ];
 
 export function SiteNav({
