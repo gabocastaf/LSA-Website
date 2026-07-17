@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { signOut } from "@/app/actions";
 
-// Roster/Events/Trophy Cabinet pages don't exist yet — these are structural
+// Events/Trophy Cabinet pages don't exist yet — these are structural
 // placeholders for the next build phase and will 404 until built.
 const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
@@ -22,8 +22,18 @@ const NAV_LINKS = [
   { href: "/trophy-room", label: "Trophy Cabinet" },
 ];
 
-export function SiteNav({ fratTitle }: { fratTitle: string }) {
+export function SiteNav({
+  fratTitle,
+  role,
+}: {
+  fratTitle: string;
+  role?: string;
+}) {
   const [open, setOpen] = useState(false);
+  const navLinks =
+    role === "admin"
+      ? [...NAV_LINKS, { href: "/admin/rush", label: "Rush" }]
+      : NAV_LINKS;
 
   return (
     <header className="border-b">
@@ -33,7 +43,7 @@ export function SiteNav({ fratTitle }: { fratTitle: string }) {
         </span>
 
         <nav className="hidden items-center gap-6 md:flex">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <a
               key={link.href}
               href={link.href}
@@ -62,7 +72,7 @@ export function SiteNav({ fratTitle }: { fratTitle: string }) {
                 <SheetTitle>Ligma Sigma Alpha</SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-4 px-4">
-                {NAV_LINKS.map((link) => (
+                {navLinks.map((link) => (
                   <a
                     key={link.href}
                     href={link.href}

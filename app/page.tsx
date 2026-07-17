@@ -32,7 +32,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <SiteNav fratTitle={fratTitle} />
+      <SiteNav fratTitle={fratTitle} role={profile?.role} />
       <main className="mx-auto max-w-5xl p-4">
         <h1 className="text-2xl font-bold tracking-tight">Welcome back, {displayName}</h1>
         <p className="mt-1 text-muted-foreground">
