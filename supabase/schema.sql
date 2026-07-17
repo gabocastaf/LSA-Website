@@ -209,6 +209,57 @@ create policy "dues_insert_own"
   with check (paid_by = auth.uid());
 
 -- =========================================================
+-- photos (Photo Gallery)
+-- =========================================================
+create table if not exists public.photos (
+  id uuid primary key default gen_random_uuid(),
+  storage_path text not null,
+  caption text,
+  uploaded_by uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.photos enable row level security;
+
+drop policy if exists "photos_select_authenticated" on public.photos;
+create policy "photos_select_authenticated"
+  on public.photos for select
+  to authenticated
+  using (true);
+
+drop policy if exists "photos_insert_own" on public.photos;
+create policy "photos_insert_own"
+  on public.photos for insert
+  to authenticated
+  with check (uploaded_by = auth.uid());
+
+drop policy if exists "photos_delete_own" on public.photos;
+create policy "photos_delete_own"
+  on public.photos for delete
+  to authenticated
+  using (uploaded_by = auth.uid());
+
+-- Storage bucket backing the Photo Gallery. Public so images can be served
+-- straight from their public URL with no signed-URL expiry to manage — this
+-- is an internal frat photo dump, not sensitive data. storage.objects
+-- already has RLS enabled by default in Supabase.
+insert into storage.buckets (id, name, public)
+values ('photos', 'photos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "photos_bucket_insert_authenticated" on storage.objects;
+create policy "photos_bucket_insert_authenticated"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'photos');
+
+drop policy if exists "photos_bucket_delete_own" on storage.objects;
+create policy "photos_bucket_delete_own"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'photos' and owner = auth.uid());
+
+-- =========================================================
 -- Auto-create a profile row whenever a new auth.users row appears
 -- (i.e. right after someone completes the magic-link signup).
 -- SECURITY DEFINER is required: at insert time the new user has no

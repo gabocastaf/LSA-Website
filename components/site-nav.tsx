@@ -20,6 +20,7 @@ const NAV_LINKS = [
   { href: "/trophy-room", label: "Trophy Cabinet" },
   { href: "/beef-tracker", label: "Beef Tracker" },
   { href: "/kangaroo-court", label: "Kangaroo Court" },
+  { href: "/photo-gallery", label: "Photo Gallery" },
 ];
 
 export function SiteNav({
