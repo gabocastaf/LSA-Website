@@ -21,7 +21,7 @@ export async function createBeef(formData: FormData) {
   }
 
   if (!title) {
-    redirect("/beef-tracker?error=Title+is+required");
+    redirect("/frat-history/beef-tracker?error=Title+is+required");
   }
 
   const { error } = await supabase.from("beefs").insert({
@@ -32,11 +32,11 @@ export async function createBeef(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/beef-tracker?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/beef-tracker?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/beef-tracker");
-  redirect("/beef-tracker");
+  revalidatePath("/frat-history/beef-tracker");
+  redirect("/frat-history/beef-tracker");
 }
 
 export async function toggleBeefStatus(formData: FormData) {
@@ -54,7 +54,7 @@ export async function toggleBeefStatus(formData: FormData) {
   }
 
   if (!beefId || (nextStatus !== "active" && nextStatus !== "squashed")) {
-    redirect("/beef-tracker?error=Invalid+request");
+    redirect("/frat-history/beef-tracker?error=Invalid+request");
   }
 
   // RLS also enforces created_by = auth.uid() on update, but this table
@@ -66,9 +66,9 @@ export async function toggleBeefStatus(formData: FormData) {
     .eq("created_by", user.id);
 
   if (error) {
-    redirect(`/beef-tracker?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/beef-tracker?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/beef-tracker");
-  redirect("/beef-tracker");
+  revalidatePath("/frat-history/beef-tracker");
+  redirect("/frat-history/beef-tracker");
 }

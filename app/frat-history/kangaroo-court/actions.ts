@@ -21,7 +21,7 @@ export async function submitQuote(formData: FormData) {
   }
 
   if (!quoteText) {
-    redirect("/kangaroo-court?error=Quote+text+is+required");
+    redirect("/frat-history/kangaroo-court?error=Quote+text+is+required");
   }
 
   const { error } = await supabase.from("quotes").insert({
@@ -31,11 +31,11 @@ export async function submitQuote(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/kangaroo-court?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/kangaroo-court?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/kangaroo-court");
-  redirect("/kangaroo-court");
+  revalidatePath("/frat-history/kangaroo-court");
+  redirect("/frat-history/kangaroo-court");
 }
 
 export async function adjustDemerits(formData: FormData) {
@@ -64,7 +64,7 @@ export async function adjustDemerits(formData: FormData) {
   }
 
   if (!profileId || Number.isNaN(demerits) || demerits < 0) {
-    redirect("/kangaroo-court?error=Invalid+demerit+count");
+    redirect("/frat-history/kangaroo-court?error=Invalid+demerit+count");
   }
 
   const admin = createAdminClient();
@@ -74,11 +74,11 @@ export async function adjustDemerits(formData: FormData) {
     .eq("id", profileId);
 
   if (error) {
-    redirect(`/kangaroo-court?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/kangaroo-court?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/kangaroo-court");
+  revalidatePath("/frat-history/kangaroo-court");
   revalidatePath("/roster");
   revalidatePath("/");
-  redirect("/kangaroo-court");
+  redirect("/frat-history/kangaroo-court");
 }

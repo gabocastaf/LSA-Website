@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/utils/supabase/server";
-import { SiteNav } from "@/components/site-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,12 +50,6 @@ export default async function BeefTrackerPage({
     redirect("/login");
   }
 
-  const { data: viewerProfile } = await supabase
-    .from("profiles")
-    .select("frat_title, role")
-    .eq("id", user.id)
-    .single();
-
   const { data: beefRows } = await supabase
     .from("beefs")
     .select(
@@ -70,68 +63,65 @@ export default async function BeefTrackerPage({
   const squashedBeefs = beefs.filter((beef) => beef.status === "squashed");
 
   return (
-    <div className="min-h-screen">
-      <SiteNav fratTitle={viewerProfile?.frat_title ?? "Pledge"} role={viewerProfile?.role} />
-      <main className="mx-auto max-w-5xl p-4">
-        <h1 className="text-2xl font-bold tracking-tight">Beef Tracker</h1>
-        <p className="mt-1 text-muted-foreground">
-          {activeBeefs.length} active {activeBeefs.length === 1 ? "beef" : "beefs"}, {squashedBeefs.length} squashed.
+    <main className="mx-auto max-w-5xl p-4">
+      <h1 className="text-2xl font-bold tracking-tight">Beef Tracker</h1>
+      <p className="mt-1 text-muted-foreground">
+        {activeBeefs.length} active {activeBeefs.length === 1 ? "beef" : "beefs"}, {squashedBeefs.length} squashed.
+      </p>
+
+      {error && (
+        <p className="mt-4 rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {error}
         </p>
+      )}
 
-        {error && (
-          <p className="mt-4 rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Start a Beef</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={createBeef} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="title">What&apos;s the beef</Label>
+              <Input id="title" name="title" placeholder="e.g. He never returns the aux cord" required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="target">Who or what it&apos;s with (optional)</Label>
+              <Input id="target" name="target" placeholder="e.g. the guy from 3B" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="reason">Details (optional)</Label>
+              <Textarea id="reason" name="reason" placeholder="Give us the full story" />
+            </div>
+            <Button type="submit" className="w-full sm:w-auto">
+              Start Beef
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Start a Beef</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form action={createBeef} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="title">What&apos;s the beef</Label>
-                <Input id="title" name="title" placeholder="e.g. He never returns the aux cord" required />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="target">Who or what it&apos;s with (optional)</Label>
-                <Input id="target" name="target" placeholder="e.g. the guy from 3B" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reason">Details (optional)</Label>
-                <Textarea id="reason" name="reason" placeholder="Give us the full story" />
-              </div>
-              <Button type="submit" className="w-full sm:w-auto">
-                Start Beef
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+      <h2 className="mt-10 text-lg font-semibold tracking-tight">Active Beefs</h2>
+      {activeBeefs.length === 0 ? (
+        <p className="mt-2 text-muted-foreground">No active beefs. Peace in the chapter house.</p>
+      ) : (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {activeBeefs.map((beef) => (
+            <BeefCard key={beef.id} beef={beef} viewerId={user.id} />
+          ))}
+        </div>
+      )}
 
-        <h2 className="mt-10 text-lg font-semibold tracking-tight">Active Beefs</h2>
-        {activeBeefs.length === 0 ? (
-          <p className="mt-2 text-muted-foreground">No active beefs. Peace in the chapter house.</p>
-        ) : (
+      {squashedBeefs.length > 0 && (
+        <>
+          <h2 className="mt-10 text-lg font-semibold tracking-tight">Squashed Beefs</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {activeBeefs.map((beef) => (
+            {squashedBeefs.map((beef) => (
               <BeefCard key={beef.id} beef={beef} viewerId={user.id} />
             ))}
           </div>
-        )}
-
-        {squashedBeefs.length > 0 && (
-          <>
-            <h2 className="mt-10 text-lg font-semibold tracking-tight">Squashed Beefs</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {squashedBeefs.map((beef) => (
-                <BeefCard key={beef.id} beef={beef} viewerId={user.id} />
-              ))}
-            </div>
-          </>
-        )}
-      </main>
-    </div>
+        </>
+      )}
+    </main>
   );
 }
 

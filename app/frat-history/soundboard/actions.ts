@@ -30,19 +30,19 @@ export async function uploadSound(formData: FormData) {
   }
 
   if (!title) {
-    redirect("/soundboard?error=Give+the+clip+a+name");
+    redirect("/frat-history/soundboard?error=Give+the+clip+a+name");
   }
 
   if (!(file instanceof File) || file.size === 0) {
-    redirect("/soundboard?error=Pick+an+audio+file+first");
+    redirect("/frat-history/soundboard?error=Pick+an+audio+file+first");
   }
 
   if (!ALLOWED_TYPES.includes(file.type)) {
-    redirect("/soundboard?error=MP3%2C+WAV%2C+OGG%2C+or+M4A+only");
+    redirect("/frat-history/soundboard?error=MP3%2C+WAV%2C+OGG%2C+or+M4A+only");
   }
 
   if (file.size > MAX_FILE_BYTES) {
-    redirect("/soundboard?error=Clip+too+large+(5MB+max)");
+    redirect("/frat-history/soundboard?error=Clip+too+large+(5MB+max)");
   }
 
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "mp3";
@@ -53,7 +53,7 @@ export async function uploadSound(formData: FormData) {
     .upload(storagePath, file, { contentType: file.type });
 
   if (uploadError) {
-    redirect(`/soundboard?error=${encodeURIComponent(uploadError.message)}`);
+    redirect(`/frat-history/soundboard?error=${encodeURIComponent(uploadError.message)}`);
   }
 
   const { error: insertError } = await supabase.from("sounds").insert({
@@ -64,11 +64,11 @@ export async function uploadSound(formData: FormData) {
 
   if (insertError) {
     await supabase.storage.from("sounds").remove([storagePath]);
-    redirect(`/soundboard?error=${encodeURIComponent(insertError.message)}`);
+    redirect(`/frat-history/soundboard?error=${encodeURIComponent(insertError.message)}`);
   }
 
-  revalidatePath("/soundboard");
-  redirect("/soundboard");
+  revalidatePath("/frat-history/soundboard");
+  redirect("/frat-history/soundboard");
 }
 
 export async function deleteSound(formData: FormData) {
@@ -86,7 +86,7 @@ export async function deleteSound(formData: FormData) {
   }
 
   if (!soundId || !storagePath) {
-    redirect("/soundboard?error=Invalid+request");
+    redirect("/frat-history/soundboard?error=Invalid+request");
   }
 
   const { error: deleteRowError } = await supabase
@@ -96,7 +96,7 @@ export async function deleteSound(formData: FormData) {
     .eq("uploaded_by", user.id);
 
   if (deleteRowError) {
-    redirect(`/soundboard?error=${encodeURIComponent(deleteRowError.message)}`);
+    redirect(`/frat-history/soundboard?error=${encodeURIComponent(deleteRowError.message)}`);
   }
 
   // Best-effort: the DB row is the source of truth for what's "in" the
@@ -104,6 +104,6 @@ export async function deleteSound(formData: FormData) {
   // request over.
   await supabase.storage.from("sounds").remove([storagePath]);
 
-  revalidatePath("/soundboard");
-  redirect("/soundboard");
+  revalidatePath("/frat-history/soundboard");
+  redirect("/frat-history/soundboard");
 }

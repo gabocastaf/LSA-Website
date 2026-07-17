@@ -21,7 +21,7 @@ export async function giveAward(formData: FormData) {
   }
 
   if (!recipientId || !title) {
-    redirect("/trophy-room?error=Recipient+and+title+are+required");
+    redirect("/frat-history/trophy-room?error=Recipient+and+title+are+required");
   }
 
   const { error } = await supabase.from("awards").insert({
@@ -32,9 +32,9 @@ export async function giveAward(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/trophy-room?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/trophy-room?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/trophy-room");
-  redirect("/trophy-room");
+  revalidatePath("/frat-history/trophy-room");
+  redirect("/frat-history/trophy-room");
 }

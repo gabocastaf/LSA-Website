@@ -17,12 +17,8 @@ const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/roster", label: "Roster" },
   { href: "/events", label: "Events" },
-  { href: "/trophy-room", label: "Trophy Cabinet" },
-  { href: "/beef-tracker", label: "Beef Tracker" },
-  { href: "/kangaroo-court", label: "Kangaroo Court" },
-  { href: "/photo-gallery", label: "Photo Gallery" },
   { href: "/dues", label: "Dues" },
-  { href: "/soundboard", label: "Soundboard" },
+  { href: "/frat-history", label: "Frat History" },
 ];
 
 export function SiteNav({

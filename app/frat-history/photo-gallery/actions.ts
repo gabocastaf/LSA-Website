@@ -23,15 +23,15 @@ export async function uploadPhoto(formData: FormData) {
   }
 
   if (!(file instanceof File) || file.size === 0) {
-    redirect("/photo-gallery?error=Pick+a+photo+first");
+    redirect("/frat-history/photo-gallery?error=Pick+a+photo+first");
   }
 
   if (!ALLOWED_TYPES.includes(file.type)) {
-    redirect("/photo-gallery?error=JPEG%2C+PNG%2C+WebP%2C+or+GIF+only");
+    redirect("/frat-history/photo-gallery?error=JPEG%2C+PNG%2C+WebP%2C+or+GIF+only");
   }
 
   if (file.size > MAX_FILE_BYTES) {
-    redirect("/photo-gallery?error=Photo+too+large+(8MB+max)");
+    redirect("/frat-history/photo-gallery?error=Photo+too+large+(8MB+max)");
   }
 
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
@@ -42,7 +42,7 @@ export async function uploadPhoto(formData: FormData) {
     .upload(storagePath, file, { contentType: file.type });
 
   if (uploadError) {
-    redirect(`/photo-gallery?error=${encodeURIComponent(uploadError.message)}`);
+    redirect(`/frat-history/photo-gallery?error=${encodeURIComponent(uploadError.message)}`);
   }
 
   const { error: insertError } = await supabase.from("photos").insert({
@@ -53,11 +53,11 @@ export async function uploadPhoto(formData: FormData) {
 
   if (insertError) {
     await supabase.storage.from("photos").remove([storagePath]);
-    redirect(`/photo-gallery?error=${encodeURIComponent(insertError.message)}`);
+    redirect(`/frat-history/photo-gallery?error=${encodeURIComponent(insertError.message)}`);
   }
 
-  revalidatePath("/photo-gallery");
-  redirect("/photo-gallery");
+  revalidatePath("/frat-history/photo-gallery");
+  redirect("/frat-history/photo-gallery");
 }
 
 export async function deletePhoto(formData: FormData) {
@@ -75,7 +75,7 @@ export async function deletePhoto(formData: FormData) {
   }
 
   if (!photoId || !storagePath) {
-    redirect("/photo-gallery?error=Invalid+request");
+    redirect("/frat-history/photo-gallery?error=Invalid+request");
   }
 
   const { error: deleteRowError } = await supabase
@@ -85,7 +85,7 @@ export async function deletePhoto(formData: FormData) {
     .eq("uploaded_by", user.id);
 
   if (deleteRowError) {
-    redirect(`/photo-gallery?error=${encodeURIComponent(deleteRowError.message)}`);
+    redirect(`/frat-history/photo-gallery?error=${encodeURIComponent(deleteRowError.message)}`);
   }
 
   // Best-effort: the DB row is the source of truth for what's "in" the
@@ -93,6 +93,6 @@ export async function deletePhoto(formData: FormData) {
   // request over.
   await supabase.storage.from("photos").remove([storagePath]);
 
-  revalidatePath("/photo-gallery");
-  redirect("/photo-gallery");
+  revalidatePath("/frat-history/photo-gallery");
+  redirect("/frat-history/photo-gallery");
 }
