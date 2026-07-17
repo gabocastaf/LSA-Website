@@ -2,10 +2,9 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/utils/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { uploadPhoto, deletePhoto } from "./actions";
+import { deletePhoto } from "./actions";
+import { PhotoUploadForm } from "./photo-upload-form";
 
 type PhotoRow = {
   id: string;
@@ -67,40 +66,7 @@ export default async function PhotoGalleryPage({
           <CardTitle>Submit Evidence</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={uploadPhoto} className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="file">Photo</Label>
-              <input
-                id="file"
-                name="file"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                required
-                className="text-sm file:mr-3 file:h-8 file:rounded-lg file:border-0 file:bg-secondary file:px-2.5 file:text-sm file:font-medium file:text-secondary-foreground"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="caption">Caption (optional, but recommended for context)</Label>
-              <Input id="caption" name="caption" placeholder="e.g. Pedro's next AI masterclass" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Who&apos;s in this? (optional)</Label>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                {roster.map((profile) => (
-                  <label
-                    key={profile.id}
-                    className="flex items-center gap-1.5 text-sm font-normal"
-                  >
-                    <input type="checkbox" name="taggedProfileIds" value={profile.id} />
-                    {profile.display_name ?? profile.email}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <Button type="submit" className="w-full sm:w-auto">
-              Add to the Gallery
-            </Button>
-          </form>
+          <PhotoUploadForm roster={roster} />
         </CardContent>
       </Card>
 
