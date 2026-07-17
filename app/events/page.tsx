@@ -1,14 +1,19 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { createClient } from "@/utils/supabase/server";
 import { SiteNav } from "@/components/site-nav";
+import { EventCalendar } from "@/components/event-calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { createEvent, setRsvp } from "./actions";
+import { createEvent, setRsvp, deleteEvent } from "./actions";
+
+const selectClassName =
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30";
 
 type RsvpStatus = "going" | "maybe" | "not_going";
 
@@ -24,6 +29,7 @@ type EventRow = {
   event_date: string;
   location: string | null;
   description: string | null;
+  attendance: "optional" | "mandatory";
   created_by: string | null;
   creator: { id: string; display_name: string | null; email: string } | null;
 };
@@ -38,9 +44,9 @@ type RsvpRow = {
 export default async function EventsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; view?: string; month?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, view, month } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -60,7 +66,7 @@ export default async function EventsPage({
   const { data: eventRows } = await supabase
     .from("events")
     .select(
-      "id, title, event_date, location, description, created_by, creator:profiles!events_created_by_fkey(id, display_name, email)",
+      "id, title, event_date, location, description, attendance, created_by, creator:profiles!events_created_by_fkey(id, display_name, email)",
     )
     .order("event_date", { ascending: true })
     .returns<EventRow[]>();
@@ -89,6 +95,9 @@ export default async function EventsPage({
   const pastEvents = events
     .filter((event) => new Date(event.event_date).getTime() < now)
     .reverse();
+
+  const isAdmin = viewerProfile?.role === "admin";
+  const isCalendarView = view === "calendar";
 
   return (
     <div className="min-h-screen">
@@ -131,6 +140,18 @@ export default async function EventsPage({
                   placeholder="Dress code, cover charge, whatever excuse we're using this time"
                 />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="attendance">Attendance</Label>
+                <select
+                  id="attendance"
+                  name="attendance"
+                  defaultValue="optional"
+                  className={selectClassName}
+                >
+                  <option value="optional">Optional</option>
+                  <option value="mandatory">Mandatory</option>
+                </select>
+              </div>
               <Button type="submit" className="w-full sm:w-auto">
                 Put It On the Calendar
               </Button>
@@ -138,39 +159,68 @@ export default async function EventsPage({
           </CardContent>
         </Card>
 
-        <h2 className="mt-10 text-lg font-semibold tracking-tight">Upcoming</h2>
-        {upcomingEvents.length === 0 ? (
-          <p className="mt-2 text-muted-foreground">
-            Nothing on the calendar. The house is suspiciously quiet.
-          </p>
-        ) : (
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {upcomingEvents.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                rsvps={rsvpsByEvent.get(event.id) ?? []}
-                viewerId={user.id}
-                isPast={false}
-              />
-            ))}
-          </div>
-        )}
+        <div className="mt-8 flex items-center gap-2">
+          <Link
+            href="/events?view=list"
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium",
+              !isCalendarView ? "bg-secondary text-secondary-foreground" : "text-muted-foreground",
+            )}
+          >
+            List
+          </Link>
+          <Link
+            href="/events?view=calendar"
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium",
+              isCalendarView ? "bg-secondary text-secondary-foreground" : "text-muted-foreground",
+            )}
+          >
+            Calendar
+          </Link>
+        </div>
 
-        {pastEvents.length > 0 && (
+        {isCalendarView ? (
+          <EventCalendar events={events} month={month} />
+        ) : (
           <>
-            <h2 className="mt-10 text-lg font-semibold tracking-tight">History</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {pastEvents.map((event) => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  rsvps={rsvpsByEvent.get(event.id) ?? []}
-                  viewerId={user.id}
-                  isPast={true}
-                />
-              ))}
-            </div>
+            <h2 className="mt-6 text-lg font-semibold tracking-tight">Upcoming</h2>
+            {upcomingEvents.length === 0 ? (
+              <p className="mt-2 text-muted-foreground">
+                Nothing on the calendar. The house is suspiciously quiet.
+              </p>
+            ) : (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {upcomingEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    rsvps={rsvpsByEvent.get(event.id) ?? []}
+                    viewerId={user.id}
+                    isAdmin={isAdmin}
+                    isPast={false}
+                  />
+                ))}
+              </div>
+            )}
+
+            {pastEvents.length > 0 && (
+              <>
+                <h2 className="mt-10 text-lg font-semibold tracking-tight">History</h2>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  {pastEvents.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      rsvps={rsvpsByEvent.get(event.id) ?? []}
+                      viewerId={user.id}
+                      isAdmin={isAdmin}
+                      isPast={true}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </main>
@@ -182,28 +232,43 @@ function EventCard({
   event,
   rsvps,
   viewerId,
+  isAdmin,
   isPast,
 }: {
   event: EventRow;
   rsvps: RsvpRow[];
   viewerId: string;
+  isAdmin: boolean;
   isPast: boolean;
 }) {
   const goingRsvps = rsvps.filter((rsvp) => rsvp.status === "going");
   const maybeCount = rsvps.filter((rsvp) => rsvp.status === "maybe").length;
   const notGoingCount = rsvps.filter((rsvp) => rsvp.status === "not_going").length;
   const viewerStatus = rsvps.find((rsvp) => rsvp.profile_id === viewerId)?.status;
+  const canManage = isAdmin || event.created_by === viewerId;
 
   return (
-    <Card>
+    <Card id={`event-${event.id}`}>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
           <span>{event.title}</span>
-          {isPast && (
-            <span className="inline-flex w-fit items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              Past
+          <span className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                event.attendance === "mandatory"
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {event.attendance === "mandatory" ? "Mandatory" : "Optional"}
             </span>
-          )}
+            {isPast && (
+              <span className="inline-flex w-fit items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                Past
+              </span>
+            )}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
@@ -251,6 +316,20 @@ function EventCard({
             </form>
           ))}
         </div>
+
+        {canManage && (
+          <div className="flex flex-wrap gap-2 border-t pt-2">
+            <Button variant="outline" size="sm" render={<Link href={`/events/${event.id}/edit`} />}>
+              Edit
+            </Button>
+            <form action={deleteEvent}>
+              <input type="hidden" name="eventId" value={event.id} />
+              <Button type="submit" variant="destructive" size="sm">
+                Delete
+              </Button>
+            </form>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

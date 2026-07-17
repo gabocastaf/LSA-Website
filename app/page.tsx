@@ -19,6 +19,7 @@ type EventRow = {
   event_date: string;
   created_at: string;
   pinned: boolean;
+  attendance: "optional" | "mandatory";
   creator: AuthorRow | null;
 };
 
@@ -134,7 +135,7 @@ export default async function DashboardPage() {
     supabase
       .from("events")
       .select(
-        "id, title, event_date, created_at, pinned, creator:profiles!events_created_by_fkey(id, display_name, email, role)",
+        "id, title, event_date, created_at, pinned, attendance, creator:profiles!events_created_by_fkey(id, display_name, email, role)",
       )
       .order("event_date", { ascending: true })
       .returns<EventRow[]>(),
@@ -211,10 +212,11 @@ export default async function DashboardPage() {
     author: toAuthor(event.creator),
     heading: "New Event",
     title: event.title,
-    detail: new Date(event.event_date).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }),
+    detail:
+      new Date(event.event_date).toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }) + (event.attendance === "mandatory" ? " · Mandatory" : ""),
     href: "/events",
   }));
 

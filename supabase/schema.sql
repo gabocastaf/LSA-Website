@@ -55,6 +55,8 @@ create table if not exists public.events (
 -- Lets an admin pin an event to the top of the home feed (e.g. formal, rush week).
 alter table public.events add column if not exists pinned boolean not null default false;
 
+alter table public.events add column if not exists attendance text not null default 'optional' check (attendance in ('optional', 'mandatory'));
+
 alter table public.events enable row level security;
 
 drop policy if exists "events_select_authenticated" on public.events;
@@ -68,6 +70,23 @@ create policy "events_insert_own"
   on public.events for insert
   to authenticated
   with check (created_by = auth.uid());
+
+-- Creator-only at the RLS layer; an admin editing/deleting someone else's
+-- event goes through app/events/actions.ts's service-role client instead,
+-- same "self-service RLS + admin override via service role" split used
+-- throughout this app (see profiles above).
+drop policy if exists "events_update_own" on public.events;
+create policy "events_update_own"
+  on public.events for update
+  to authenticated
+  using (created_by = auth.uid())
+  with check (created_by = auth.uid());
+
+drop policy if exists "events_delete_own" on public.events;
+create policy "events_delete_own"
+  on public.events for delete
+  to authenticated
+  using (created_by = auth.uid());
 
 -- =========================================================
 -- event_rsvps

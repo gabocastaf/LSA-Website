@@ -4,15 +4,26 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createResendClient } from "@/utils/resend/client";
 
 const EVENTS_FROM_EMAIL = "Ligma Sigma Alpha <no-reply@ligmasigma.com>";
+
+const VALID_ATTENDANCE = ["optional", "mandatory"] as const;
+type Attendance = (typeof VALID_ATTENDANCE)[number];
+
+function parseAttendance(value: string | undefined): Attendance {
+  return (VALID_ATTENDANCE as readonly string[]).includes(value ?? "")
+    ? (value as Attendance)
+    : "optional";
+}
 
 export async function createEvent(formData: FormData) {
   const title = formData.get("title")?.toString().trim();
   const eventDate = formData.get("eventDate")?.toString();
   const location = formData.get("location")?.toString().trim();
   const description = formData.get("description")?.toString().trim();
+  const attendance = parseAttendance(formData.get("attendance")?.toString());
 
   const supabase = await createClient();
 
@@ -38,6 +49,7 @@ export async function createEvent(formData: FormData) {
     event_date: parsedDate.toISOString(),
     location: location || null,
     description: description || null,
+    attendance,
     created_by: user.id,
   });
 
@@ -141,5 +153,105 @@ export async function setRsvp(formData: FormData) {
   }
 
   revalidatePath("/events");
+  redirect("/events");
+}
+
+async function requireEditAccess(eventId: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("created_by")
+    .eq("id", eventId)
+    .single();
+
+  const { data: viewer } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const isCreator = event?.created_by === user.id;
+  const isAdmin = viewer?.role === "admin";
+
+  if (!isCreator && !isAdmin) {
+    redirect("/events?error=Not+your+event");
+  }
+
+  // Creator writes go through the regular client so the events_update_own /
+  // events_delete_own RLS policies actually do the enforcing. Only the
+  // admin-override case (editing/deleting someone else's event) needs the
+  // service-role client to bypass RLS.
+  return { client: isCreator ? supabase : createAdminClient() };
+}
+
+export async function updateEvent(formData: FormData) {
+  const eventId = formData.get("eventId")?.toString();
+  const title = formData.get("title")?.toString().trim();
+  const eventDate = formData.get("eventDate")?.toString();
+  const location = formData.get("location")?.toString().trim();
+  const description = formData.get("description")?.toString().trim();
+  const attendance = parseAttendance(formData.get("attendance")?.toString());
+
+  if (!eventId) {
+    redirect("/events?error=Missing+event");
+  }
+
+  const { client } = await requireEditAccess(eventId);
+
+  if (!title || !eventDate) {
+    redirect(`/events/${eventId}/edit?error=Title+and+date+are+required`);
+  }
+
+  const parsedDate = new Date(eventDate);
+  if (Number.isNaN(parsedDate.getTime())) {
+    redirect(`/events/${eventId}/edit?error=Invalid+date`);
+  }
+
+  const { error } = await client
+    .from("events")
+    .update({
+      title,
+      event_date: parsedDate.toISOString(),
+      location: location || null,
+      description: description || null,
+      attendance,
+    })
+    .eq("id", eventId);
+
+  if (error) {
+    redirect(`/events/${eventId}/edit?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/events");
+  revalidatePath("/");
+  redirect("/events");
+}
+
+export async function deleteEvent(formData: FormData) {
+  const eventId = formData.get("eventId")?.toString();
+
+  if (!eventId) {
+    redirect("/events?error=Missing+event");
+  }
+
+  const { client } = await requireEditAccess(eventId);
+
+  const { error } = await client.from("events").delete().eq("id", eventId);
+
+  if (error) {
+    redirect(`/events?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/events");
+  revalidatePath("/");
   redirect("/events");
 }
