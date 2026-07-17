@@ -21,6 +21,7 @@ const NAV_LINKS = [
   { href: "/beef-tracker", label: "Beef Tracker" },
   { href: "/kangaroo-court", label: "Kangaroo Court" },
   { href: "/photo-gallery", label: "Photo Gallery" },
+  { href: "/dues", label: "Dues" },
 ];
 
 export function SiteNav({
