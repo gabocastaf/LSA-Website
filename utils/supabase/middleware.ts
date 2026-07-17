@@ -33,6 +33,35 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/auth");
 
+  if (user && !isAuthRoute) {
+    // Kicking bans the auth user (blocks new logins/refreshes), but a
+    // currently-valid access token keeps working until it expires. This
+    // check tears down an existing session immediately on a kicked
+    // member's next request instead of waiting out that window. Guarded by
+    // !isAuthRoute so this doesn't fire on the /login redirect below and
+    // loop.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("kicked")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.kicked) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("error", "You've been kicked from the chapter.");
+      const redirectResponse = NextResponse.redirect(url);
+      // Carry over the Set-Cookie headers signOut() queued on
+      // supabaseResponse — a fresh NextResponse here wouldn't include them,
+      // and the session wouldn't actually clear client-side.
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie);
+      });
+      return redirectResponse;
+    }
+  }
+
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

@@ -19,6 +19,14 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+function KickedBadge() {
+  return (
+    <span className="inline-flex w-fit items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+      Excommunicated
+    </span>
+  );
+}
+
 export default async function RosterPage() {
   const supabase = await createClient();
 
@@ -38,11 +46,12 @@ export default async function RosterPage() {
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, display_name, email, pledge_class, frat_title, role, demerits")
+    .select("id, display_name, email, pledge_class, frat_title, role, demerits, kicked")
     .order("pledge_class", { ascending: true })
     .order("display_name", { ascending: true });
 
   const roster = profiles ?? [];
+  const activeCount = roster.filter((profile) => !profile.kicked).length;
 
   return (
     <div className="min-h-screen">
@@ -50,7 +59,7 @@ export default async function RosterPage() {
       <main className="mx-auto max-w-5xl p-4">
         <h1 className="text-2xl font-bold tracking-tight">Frat Roster</h1>
         <p className="mt-1 text-muted-foreground">
-          {roster.length} {roster.length === 1 ? "brother" : "brothers"} in the chapter.
+          {activeCount} {activeCount === 1 ? "brother" : "brothers"} in the chapter.
         </p>
 
         {/* Mobile: stacked cards */}
@@ -60,7 +69,10 @@ export default async function RosterPage() {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between gap-2">
                   <span>{profile.display_name ?? profile.email}</span>
-                  <RoleBadge role={profile.role} />
+                  <span className="flex items-center gap-1.5">
+                    {profile.kicked && <KickedBadge />}
+                    <RoleBadge role={profile.role} />
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1 text-sm">
@@ -104,7 +116,10 @@ export default async function RosterPage() {
               {roster.map((profile) => (
                 <tr key={profile.id} className="border-t">
                   <td className="px-4 py-3 font-medium">
-                    {profile.display_name ?? profile.email}
+                    <span className="flex items-center gap-1.5">
+                      {profile.display_name ?? profile.email}
+                      {profile.kicked && <KickedBadge />}
+                    </span>
                   </td>
                   <td className="px-4 py-3">{profile.frat_title}</td>
                   <td className="px-4 py-3">{profile.pledge_class ?? "—"}</td>

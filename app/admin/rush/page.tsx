@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { updateMember } from "./actions";
+import { DeleteAccountButton } from "@/components/delete-account-button";
+import { cn } from "@/lib/utils";
+import { updateMember, kickMember, deleteMember } from "./actions";
 
 const ROLE_OPTIONS = ["pledge", "active", "admin"] as const;
 const ROLE_LABEL: Record<string, string> = {
@@ -53,7 +55,7 @@ export default async function RushPipelinePage({
 
   const { data: allMembers } = await supabase
     .from("profiles")
-    .select("id, display_name, email, frat_title, role")
+    .select("id, display_name, email, frat_title, role, kicked")
     .order("role", { ascending: true })
     .order("display_name", { ascending: true });
 
@@ -124,16 +126,21 @@ export default async function RushPipelinePage({
             return (
               <Card key={profile.id}>
                 <CardHeader>
-                  <CardTitle>
-                    {profile.display_name ?? profile.email}
+                  <CardTitle className="flex items-center gap-2">
+                    <span>{profile.display_name ?? profile.email}</span>
                     {isSelf && (
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      <span className="text-xs font-normal text-muted-foreground">
                         (you)
+                      </span>
+                    )}
+                    {profile.kicked && (
+                      <span className="inline-flex w-fit items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                        Excommunicated
                       </span>
                     )}
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex flex-col gap-4">
                   <form action={updateMember} className="flex flex-col gap-3">
                     <input type="hidden" name="profileId" value={profile.id} />
                     <div className="flex flex-col gap-1.5">
@@ -170,6 +177,43 @@ export default async function RushPipelinePage({
                       Save
                     </Button>
                   </form>
+
+                  {isSelf ? (
+                    <p className="text-xs text-muted-foreground">
+                      Kicking and account deletion aren&apos;t available on your own
+                      account, for the same reason — use Supabase directly if you ever
+                      need to.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2 border-t pt-3">
+                      <form action={kickMember}>
+                        <input type="hidden" name="profileId" value={profile.id} />
+                        <input
+                          type="hidden"
+                          name="kicked"
+                          value={(!profile.kicked).toString()}
+                        />
+                        <Button
+                          type="submit"
+                          variant={profile.kicked ? "secondary" : "outline"}
+                          size="sm"
+                          className={cn(
+                            "w-full",
+                            !profile.kicked &&
+                              "border-destructive/40 text-destructive hover:bg-destructive/10",
+                          )}
+                        >
+                          {profile.kicked ? "Let Them Back In" : "Kick to the Curb"}
+                        </Button>
+                      </form>
+                      <form action={deleteMember} className="[&>*]:w-full">
+                        <input type="hidden" name="profileId" value={profile.id} />
+                        <DeleteAccountButton
+                          name={profile.display_name ?? profile.email}
+                        />
+                      </form>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

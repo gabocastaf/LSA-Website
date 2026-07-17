@@ -18,6 +18,13 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- Set by an admin's "Kick" action (app/admin/rush/actions.ts). Kicking also
+-- bans the auth user via the service-role admin API; this column is what
+-- lets the app show a status badge and force an immediate sign-out on a
+-- kicked member's next request (utils/supabase/middleware.ts) without
+-- waiting for their existing session to expire.
+alter table public.profiles add column if not exists kicked boolean not null default false;
+
 alter table public.profiles enable row level security;
 
 drop policy if exists "profiles_select_authenticated" on public.profiles;
@@ -115,6 +122,16 @@ create table if not exists public.awards (
 
 -- Lets an admin pin a trophy to the top of the home feed.
 alter table public.awards add column if not exists pinned boolean not null default false;
+
+-- recipient_id started out not-null + on delete cascade, unlike every other
+-- author-type FK in this file — that meant deleting a member's account would
+-- silently delete every trophy they'd ever *received*, not just their own
+-- authored rows. Loosen it to match given_by's on-delete-set-null so a
+-- deleted account's trophies survive with an "Unknown" recipient.
+alter table public.awards alter column recipient_id drop not null;
+alter table public.awards drop constraint if exists awards_recipient_id_fkey;
+alter table public.awards add constraint awards_recipient_id_fkey
+  foreign key (recipient_id) references public.profiles (id) on delete set null;
 
 alter table public.awards enable row level security;
 
