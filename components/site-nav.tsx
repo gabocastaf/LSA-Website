@@ -52,7 +52,12 @@ export function SiteNav({
               {link.label}
             </a>
           ))}
-          <span className="text-sm text-muted-foreground">{fratTitle}</span>
+          <a
+            href="/profile"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {fratTitle}
+          </a>
           <form action={signOut}>
             <Button variant="outline" size="sm" type="submit">
               Sign Out
@@ -82,7 +87,12 @@ export function SiteNav({
                     {link.label}
                   </a>
                 ))}
-                <span className="text-sm text-muted-foreground">{fratTitle}</span>
+                <a
+            href="/profile"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {fratTitle}
+          </a>
                 <form action={signOut}>
                   <Button variant="outline" size="sm" type="submit" className="w-full">
                     Sign Out
