@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { roleRank } from "@/lib/rank";
 
 const VALID_ROLES = ["pledge", "active", "admin"] as const;
 type Role = (typeof VALID_ROLES)[number];
@@ -32,6 +33,15 @@ export async function updateMember(formData: FormData) {
   }
 
   const admin = createAdminClient();
+
+  // Read before write so the membership_events log below can diff old vs
+  // new and snapshot a name for the feed.
+  const { data: target } = await admin
+    .from("profiles")
+    .select("display_name, email, role, frat_title")
+    .eq("id", profileId)
+    .single();
+
   const { error } = await admin
     .from("profiles")
     .update({
@@ -42,6 +52,44 @@ export async function updateMember(formData: FormData) {
 
   if (error) {
     redirect(`/admin/rush?error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (target) {
+    const subjectLabel = target.display_name ?? target.email;
+    const events: {
+      profile_id: string;
+      subject_label: string;
+      actor_id: string;
+      type: "promoted" | "demoted" | "retitled";
+      from_value: string;
+      to_value: string;
+    }[] = [];
+
+    if (!isSelf && isValidRole(role) && role !== target.role) {
+      events.push({
+        profile_id: profileId,
+        subject_label: subjectLabel,
+        actor_id: user.id,
+        type: roleRank(role) > roleRank(target.role) ? "promoted" : "demoted",
+        from_value: target.role,
+        to_value: role,
+      });
+    }
+
+    if (fratTitle && fratTitle !== target.frat_title) {
+      events.push({
+        profile_id: profileId,
+        subject_label: subjectLabel,
+        actor_id: user.id,
+        type: "retitled",
+        from_value: target.frat_title,
+        to_value: fratTitle,
+      });
+    }
+
+    if (events.length > 0) {
+      await admin.from("membership_events").insert(events);
+    }
   }
 
   revalidatePath("/admin/rush");
@@ -92,6 +140,12 @@ export async function kickMember(formData: FormData) {
 
   const admin = createAdminClient();
 
+  const { data: target } = await admin
+    .from("profiles")
+    .select("display_name, email")
+    .eq("id", profileId)
+    .single();
+
   // Bans (or lifts the ban on) the auth user so a kicked member can't get a
   // fresh session either — the middleware check only tears down an existing
   // session. "876000h" is ~100 years, i.e. effectively permanent until
@@ -107,6 +161,15 @@ export async function kickMember(formData: FormData) {
 
   if (error) {
     redirect(`/admin/rush?error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (target) {
+    await admin.from("membership_events").insert({
+      profile_id: profileId,
+      subject_label: target.display_name ?? target.email,
+      actor_id: user.id,
+      type: nextKicked ? "kicked" : "reinstated",
+    });
   }
 
   revalidatePath("/admin/rush");

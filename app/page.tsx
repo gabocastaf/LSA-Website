@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { SiteNav } from "@/components/site-nav";
 import { EventCountdown } from "@/components/event-countdown";
 import { FeedItemCard, type FeedItem } from "@/components/feed-item-card";
+import { ROLE_LABEL, type Role } from "@/lib/rank";
 
 type AuthorRow = {
   id: string;
@@ -75,6 +76,25 @@ type ThreadRow = {
   author: AuthorRow | null;
 };
 
+type JoinedProfileRow = {
+  id: string;
+  display_name: string | null;
+  email: string;
+  role: string;
+  created_at: string;
+};
+
+type MembershipEventRow = {
+  id: string;
+  subject_label: string;
+  type: "promoted" | "demoted" | "retitled" | "kicked" | "reinstated";
+  from_value: string | null;
+  to_value: string | null;
+  created_at: string;
+  pinned: boolean;
+  actor: AuthorRow | null;
+};
+
 const NO_AUTHOR = { display_name: null, email: null, role: null };
 
 function toAuthor(row: AuthorRow | null) {
@@ -108,6 +128,8 @@ export default async function DashboardPage() {
     { data: photoRows },
     { data: soundRows },
     { data: threadRows },
+    { data: joinedRows },
+    { data: membershipEventRows },
   ] = await Promise.all([
     supabase
       .from("events")
@@ -159,6 +181,17 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .limit(20)
       .returns<ThreadRow[]>(),
+    supabase
+      .from("profiles")
+      .select("id, display_name, email, role, created_at")
+      .returns<JoinedProfileRow[]>(),
+    supabase
+      .from("membership_events")
+      .select(
+        "id, subject_label, type, from_value, to_value, created_at, pinned, actor:profiles!membership_events_actor_id_fkey(id, display_name, email, role)",
+      )
+      .order("created_at", { ascending: false })
+      .returns<MembershipEventRow[]>(),
   ]);
 
   const events = eventRows ?? [];
@@ -268,6 +301,71 @@ export default async function DashboardPage() {
     href: "/thread",
   }));
 
+  const joinedItems: FeedItem[] = (joinedRows ?? []).map((profile) => ({
+    id: profile.id,
+    kind: "joined",
+    table: null,
+    createdAt: profile.created_at,
+    pinned: false,
+    author: toAuthor(profile),
+    heading: "New Member",
+    title: `${profile.display_name ?? profile.email} pledged. God help them.`,
+    href: "/roster",
+  }));
+
+  function roleLabel(value: string | null) {
+    return value ? (ROLE_LABEL[value as Role] ?? value) : "";
+  }
+
+  const membershipItems: FeedItem[] = (membershipEventRows ?? []).map((event) => {
+    const base = {
+      id: event.id,
+      table: "membership_events" as const,
+      createdAt: event.created_at,
+      pinned: event.pinned,
+      author: toAuthor(event.actor),
+      href: "/roster",
+    };
+
+    switch (event.type) {
+      case "promoted":
+        return {
+          ...base,
+          kind: "promoted",
+          heading: "Promotion",
+          title: `${event.subject_label} got promoted to ${roleLabel(event.to_value)}. Try not to let it go to their head.`,
+        };
+      case "demoted":
+        return {
+          ...base,
+          kind: "demoted",
+          heading: "Demotion",
+          title: `${event.subject_label} got busted down to ${roleLabel(event.to_value)}.`,
+        };
+      case "retitled":
+        return {
+          ...base,
+          kind: "retitled",
+          heading: "New Title",
+          title: `${event.subject_label} is now officially "${event.to_value}".`,
+        };
+      case "kicked":
+        return {
+          ...base,
+          kind: "kicked",
+          heading: "Kicked",
+          title: `${event.subject_label} got the boot.`,
+        };
+      case "reinstated":
+        return {
+          ...base,
+          kind: "reinstated",
+          heading: "Reinstated",
+          title: `${event.subject_label} weaseled their way back in.`,
+        };
+    }
+  });
+
   const allItems = [
     ...eventItems,
     ...awardItems,
@@ -276,6 +374,8 @@ export default async function DashboardPage() {
     ...photoItems,
     ...soundItems,
     ...threadItems,
+    ...joinedItems,
+    ...membershipItems,
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const pinnedItems = allItems.filter((item) => item.pinned);

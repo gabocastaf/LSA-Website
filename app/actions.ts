@@ -25,6 +25,7 @@ const PINNABLE_TABLES = [
   "photos",
   "sounds",
   "thread_messages",
+  "membership_events",
 ] as const;
 type PinnableTable = (typeof PINNABLE_TABLES)[number];
 

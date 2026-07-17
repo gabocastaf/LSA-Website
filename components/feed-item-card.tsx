@@ -9,6 +9,12 @@ import {
   MessageCircle,
   Pin,
   PinOff,
+  UserPlus,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Tag,
+  UserX,
+  UserCheck,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +29,13 @@ export type FeedKind =
   | "beef"
   | "photo"
   | "sound"
-  | "thread";
+  | "thread"
+  | "joined"
+  | "promoted"
+  | "demoted"
+  | "retitled"
+  | "kicked"
+  | "reinstated";
 
 export type PinnableTable =
   | "events"
@@ -32,12 +44,13 @@ export type PinnableTable =
   | "beefs"
   | "photos"
   | "sounds"
-  | "thread_messages";
+  | "thread_messages"
+  | "membership_events";
 
 export type FeedItem = {
   id: string;
   kind: FeedKind;
-  table: PinnableTable;
+  table: PinnableTable | null;
   createdAt: string;
   pinned: boolean;
   author: {
@@ -60,6 +73,12 @@ const KIND_ICON: Record<FeedKind, React.ComponentType<{ className?: string }>> =
   photo: ImageIcon,
   sound: Music,
   thread: MessageCircle,
+  joined: UserPlus,
+  promoted: ArrowUpCircle,
+  demoted: ArrowDownCircle,
+  retitled: Tag,
+  kicked: UserX,
+  reinstated: UserCheck,
 };
 
 export function FeedItemCard({ item, isAdmin }: { item: FeedItem; isAdmin: boolean }) {
@@ -73,7 +92,7 @@ export function FeedItemCard({ item, isAdmin }: { item: FeedItem; isAdmin: boole
             <Icon className="size-4 shrink-0 text-muted-foreground" />
             <span className="truncate">{item.heading}</span>
           </Link>
-          {isAdmin && (
+          {isAdmin && item.table && (
             <form action={togglePin}>
               <input type="hidden" name="table" value={item.table} />
               <input type="hidden" name="id" value={item.id} />

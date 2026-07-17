@@ -387,6 +387,40 @@ begin
 end $$;
 
 -- =========================================================
+-- membership_events (roster history — joins are derived live from
+-- profiles.created_at at feed-render time; this table only logs
+-- admin-driven changes: promotions/demotions, retitles, kicks, and
+-- reinstatements, since profiles only ever holds current state)
+-- =========================================================
+create table if not exists public.membership_events (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete set null,
+  -- Snapshot of the affected member's display_name/email at the time of the
+  -- action — deliberately NOT resolved via a live join, so a promotion or
+  -- kick record keeps showing a name even after the account is later
+  -- deleted (this log shouldn't be the one place that goes blank).
+  subject_label text not null,
+  actor_id uuid references public.profiles (id) on delete set null,
+  type text not null check (type in ('promoted', 'demoted', 'retitled', 'kicked', 'reinstated')),
+  from_value text,
+  to_value text,
+  pinned boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.membership_events enable row level security;
+
+drop policy if exists "membership_events_select_authenticated" on public.membership_events;
+create policy "membership_events_select_authenticated"
+  on public.membership_events for select
+  to authenticated
+  using (true);
+
+-- No client-side insert/update/delete policy: only ever written by
+-- updateMember/kickMember (app/admin/rush/actions.ts) via the service-role
+-- client, same reasoning as profiles itself.
+
+-- =========================================================
 -- Auto-create a profile row whenever a new auth.users row appears
 -- (i.e. right after someone completes the magic-link signup).
 -- SECURITY DEFINER is required: at insert time the new user has no
