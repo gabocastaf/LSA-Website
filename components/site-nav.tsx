@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/sheet";
 import { signOut } from "@/app/actions";
 
-// Events/Trophy Cabinet pages don't exist yet — these are structural
-// placeholders for the next build phase and will 404 until built.
+// Events page doesn't exist yet — this is a structural placeholder
+// for the next build phase and will 404 until built.
 const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/roster", label: "Roster" },
