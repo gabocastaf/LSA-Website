@@ -4,21 +4,21 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-const TABS = [
-  { href: "/frat-history/trophy-room", label: "Trophy Cabinet" },
-  { href: "/frat-history/beef-tracker", label: "Beef Tracker" },
-  { href: "/frat-history/kangaroo-court", label: "Kangaroo Court" },
-  { href: "/frat-history/photo-gallery", label: "Photo Gallery" },
-  { href: "/frat-history/soundboard", label: "Soundboard" },
+const BASE_TABS = [
+  { href: "/frat-history/roster", label: "Roster" },
+  { href: "/frat-history/dues", label: "Dues" },
 ];
 
-export function FratHistoryTabs() {
+const ADMIN_TAB = { href: "/frat-history/admin", label: "Admin" };
+
+export function LsaTabs({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
+  const tabs = isAdmin ? [...BASE_TABS, ADMIN_TAB] : BASE_TABS;
 
   return (
     <div className="border-b">
       <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <a
             key={tab.href}
             href={tab.href}

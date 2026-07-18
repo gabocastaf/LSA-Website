@@ -24,51 +24,10 @@ type EventRow = {
   creator: AuthorRow | null;
 };
 
-type AwardRow = {
-  id: string;
-  title: string;
-  reason: string | null;
-  created_at: string;
-  pinned: boolean;
-  hidden: boolean;
-  recipient: AuthorRow | null;
-  giver: AuthorRow | null;
-};
-
-type QuoteRow = {
-  id: string;
-  quote_text: string;
-  created_at: string;
-  pinned: boolean;
-  hidden: boolean;
-  attributed: AuthorRow | null;
-  submitter: AuthorRow | null;
-};
-
-type BeefRow = {
-  id: string;
-  title: string;
-  target: string | null;
-  created_at: string;
-  pinned: boolean;
-  hidden: boolean;
-  creator: AuthorRow | null;
-};
-
 type PhotoRow = {
   id: string;
   storage_path: string;
   caption: string | null;
-  created_at: string;
-  pinned: boolean;
-  hidden: boolean;
-  uploader: AuthorRow | null;
-};
-
-type SoundRow = {
-  id: string;
-  storage_path: string;
-  title: string;
   created_at: string;
   pinned: boolean;
   hidden: boolean;
@@ -131,11 +90,7 @@ export default async function DashboardPage() {
 
   const [
     { data: eventRows },
-    { data: awardRows },
-    { data: quoteRows },
-    { data: beefRows },
     { data: photoRows },
-    { data: soundRows },
     { data: threadRows },
     { data: joinedRows },
     { data: membershipEventRows },
@@ -148,40 +103,12 @@ export default async function DashboardPage() {
       .order("event_date", { ascending: true })
       .returns<EventRow[]>(),
     supabase
-      .from("awards")
-      .select(
-        "id, title, reason, created_at, pinned, hidden, recipient:profiles!awards_recipient_id_fkey(id, display_name, email, role), giver:profiles!awards_given_by_fkey(id, display_name, email, role)",
-      )
-      .order("created_at", { ascending: false })
-      .returns<AwardRow[]>(),
-    supabase
-      .from("quotes")
-      .select(
-        "id, quote_text, created_at, pinned, hidden, attributed:profiles!quotes_attributed_to_fkey(id, display_name, email, role), submitter:profiles!quotes_submitted_by_fkey(id, display_name, email, role)",
-      )
-      .order("created_at", { ascending: false })
-      .returns<QuoteRow[]>(),
-    supabase
-      .from("beefs")
-      .select(
-        "id, title, target, created_at, pinned, hidden, creator:profiles!beefs_created_by_fkey(id, display_name, email, role)",
-      )
-      .order("created_at", { ascending: false })
-      .returns<BeefRow[]>(),
-    supabase
       .from("photos")
       .select(
         "id, storage_path, caption, created_at, pinned, hidden, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email, role)",
       )
       .order("created_at", { ascending: false })
       .returns<PhotoRow[]>(),
-    supabase
-      .from("sounds")
-      .select(
-        "id, storage_path, title, created_at, pinned, hidden, uploader:profiles!sounds_uploaded_by_fkey(id, display_name, email, role)",
-      )
-      .order("created_at", { ascending: false })
-      .returns<SoundRow[]>(),
     supabase
       .from("thread_messages")
       .select(
@@ -233,48 +160,6 @@ export default async function DashboardPage() {
     href: "/events",
   }));
 
-  const awardItems: FeedItem[] = (awardRows ?? []).map((award) => ({
-    id: award.id,
-    kind: "award",
-    table: "awards",
-    createdAt: award.created_at,
-    pinned: award.pinned,
-    hidden: award.hidden,
-    author: toAuthor(award.giver),
-    heading: "New Trophy",
-    title: `${award.title} — ${award.recipient?.display_name ?? award.recipient?.email ?? "Unknown"}`,
-    detail: award.reason,
-    href: "/frat-history/trophy-room",
-  }));
-
-  const quoteItems: FeedItem[] = (quoteRows ?? []).map((quote) => ({
-    id: quote.id,
-    kind: "quote",
-    table: "quotes",
-    createdAt: quote.created_at,
-    pinned: quote.pinned,
-    hidden: quote.hidden,
-    author: toAuthor(quote.submitter),
-    heading: "New Quote",
-    title: `“${quote.quote_text}”`,
-    detail: `— ${quote.attributed?.display_name ?? quote.attributed?.email ?? "Unknown"}`,
-    href: "/frat-history/kangaroo-court",
-  }));
-
-  const beefItems: FeedItem[] = (beefRows ?? []).map((beef) => ({
-    id: beef.id,
-    kind: "beef",
-    table: "beefs",
-    createdAt: beef.created_at,
-    pinned: beef.pinned,
-    hidden: beef.hidden,
-    author: toAuthor(beef.creator),
-    heading: "New Beef",
-    title: beef.title,
-    detail: beef.target ? `With: ${beef.target}` : null,
-    href: "/frat-history/beef-tracker",
-  }));
-
   const photoItems: FeedItem[] = (photoRows ?? []).map((photo) => {
     const { data: publicUrlData } = supabase.storage.from("photos").getPublicUrl(photo.storage_path);
     return {
@@ -288,26 +173,8 @@ export default async function DashboardPage() {
       author: toAuthor(photo.uploader),
       heading: "New Photo",
       title: photo.caption ?? "Untitled evidence",
-      href: "/frat-history/photo-gallery",
+      href: "/moments",
       media: { type: "image", url: publicUrlData.publicUrl },
-    };
-  });
-
-  const soundItems: FeedItem[] = (soundRows ?? []).map((sound) => {
-    const { data: publicUrlData } = supabase.storage.from("sounds").getPublicUrl(sound.storage_path);
-    return {
-      id: sound.id,
-      kind: "sound",
-      table: "sounds",
-      createdAt: sound.created_at,
-      pinned: sound.pinned,
-      hidden: sound.hidden,
-      storagePath: sound.storage_path,
-      author: toAuthor(sound.uploader),
-      heading: "New Sound",
-      title: sound.title,
-      href: "/frat-history/soundboard",
-      media: { type: "audio", url: publicUrlData.publicUrl },
     };
   });
 
@@ -334,7 +201,7 @@ export default async function DashboardPage() {
     author: toAuthor(profile),
     heading: "New Member",
     title: `${profile.display_name ?? profile.email} pledged. God help them.`,
-    href: "/roster",
+    href: "/frat-history/roster",
   }));
 
   function roleLabel(value: string | null) {
@@ -349,7 +216,7 @@ export default async function DashboardPage() {
       pinned: event.pinned,
       hidden: event.hidden,
       author: toAuthor(event.actor),
-      href: "/roster",
+      href: "/frat-history/roster",
     };
 
     switch (event.type) {
@@ -393,11 +260,7 @@ export default async function DashboardPage() {
 
   const allItems = [
     ...eventItems,
-    ...awardItems,
-    ...quoteItems,
-    ...beefItems,
     ...photoItems,
-    ...soundItems,
     ...threadItems,
     ...joinedItems,
     ...membershipItems,

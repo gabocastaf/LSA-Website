@@ -18,7 +18,7 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
--- Set by an admin's "Kick" action (app/admin/rush/actions.ts). Kicking also
+-- Set by an admin's "Kick" action (app/frat-history/admin/actions.ts). Kicking also
 -- bans the auth user via the service-role admin API; this column is what
 -- lets the app show a status badge and force an immediate sign-out on a
 -- kicked member's next request (utils/supabase/middleware.ts) without
@@ -132,126 +132,6 @@ create policy "rsvps_delete_own"
   using (profile_id = auth.uid());
 
 -- =========================================================
--- awards (Trophy Cabinet)
--- =========================================================
-create table if not exists public.awards (
-  id uuid primary key default gen_random_uuid(),
-  recipient_id uuid not null references public.profiles (id) on delete cascade,
-  title text not null,
-  reason text,
-  given_by uuid references public.profiles (id) on delete set null,
-  created_at timestamptz not null default now()
-);
-
--- Lets an admin pin a trophy to the top of the home feed.
-alter table public.awards add column if not exists pinned boolean not null default false;
-
--- Lets an admin hide a trophy from the feed and Trophy Cabinet without deleting it.
-alter table public.awards add column if not exists hidden boolean not null default false;
-
--- recipient_id started out not-null + on delete cascade, unlike every other
--- author-type FK in this file — that meant deleting a member's account would
--- silently delete every trophy they'd ever *received*, not just their own
--- authored rows. Loosen it to match given_by's on-delete-set-null so a
--- deleted account's trophies survive with an "Unknown" recipient.
-alter table public.awards alter column recipient_id drop not null;
-alter table public.awards drop constraint if exists awards_recipient_id_fkey;
-alter table public.awards add constraint awards_recipient_id_fkey
-  foreign key (recipient_id) references public.profiles (id) on delete set null;
-
-alter table public.awards enable row level security;
-
-drop policy if exists "awards_select_authenticated" on public.awards;
-create policy "awards_select_authenticated"
-  on public.awards for select
-  to authenticated
-  using (true);
-
-drop policy if exists "awards_insert_own" on public.awards;
-create policy "awards_insert_own"
-  on public.awards for insert
-  to authenticated
-  with check (given_by = auth.uid());
-
--- =========================================================
--- quotes (Quote Book / Kangaroo Court)
--- =========================================================
-create table if not exists public.quotes (
-  id uuid primary key default gen_random_uuid(),
-  quote_text text not null,
-  attributed_to uuid references public.profiles (id) on delete set null,
-  submitted_by uuid references public.profiles (id) on delete set null,
-  created_at timestamptz not null default now()
-);
-
--- Lets an admin pin a quote to the top of the home feed.
-alter table public.quotes add column if not exists pinned boolean not null default false;
-
--- Lets an admin hide a quote from the feed and Kangaroo Court without deleting it.
-alter table public.quotes add column if not exists hidden boolean not null default false;
-
-alter table public.quotes enable row level security;
-
-drop policy if exists "quotes_select_authenticated" on public.quotes;
-create policy "quotes_select_authenticated"
-  on public.quotes for select
-  to authenticated
-  using (true);
-
-drop policy if exists "quotes_insert_own" on public.quotes;
-create policy "quotes_insert_own"
-  on public.quotes for insert
-  to authenticated
-  with check (submitted_by = auth.uid());
-
--- =========================================================
--- beefs (Beef Tracker)
--- =========================================================
-create table if not exists public.beefs (
-  id uuid primary key default gen_random_uuid(),
-  title text not null,
-  target text,
-  reason text,
-  status text not null default 'active' check (status in ('active', 'squashed')),
-  created_by uuid references public.profiles (id) on delete set null,
-  created_at timestamptz not null default now()
-);
-
--- Lets an admin pin a beef to the top of the home feed.
-alter table public.beefs add column if not exists pinned boolean not null default false;
-
--- Lets an admin hide a beef from the feed and Beef Tracker without deleting it.
-alter table public.beefs add column if not exists hidden boolean not null default false;
-
--- Optional link to a real member, alongside the free-text `target` column.
--- `target` stays free text on purpose (a beef can be with "the guy from
--- 3B", not just a real profile) — this is additive structure so a beef can
--- ALSO be tied to a member reliably, e.g. for a "My Nemeses" list, without
--- losing the ability to target non-members.
-alter table public.beefs add column if not exists target_profile_id uuid references public.profiles (id) on delete set null;
-
-alter table public.beefs enable row level security;
-
-drop policy if exists "beefs_select_authenticated" on public.beefs;
-create policy "beefs_select_authenticated"
-  on public.beefs for select
-  to authenticated
-  using (true);
-
-drop policy if exists "beefs_insert_own" on public.beefs;
-create policy "beefs_insert_own"
-  on public.beefs for insert
-  to authenticated
-  with check (created_by = auth.uid());
-
-drop policy if exists "beefs_update_own" on public.beefs;
-create policy "beefs_update_own"
-  on public.beefs for update
-  to authenticated
-  using (created_by = auth.uid())
-  with check (created_by = auth.uid());
-
--- =========================================================
 -- dues (Chapter Dues ledger)
 -- =========================================================
 create table if not exists public.dues (
@@ -345,8 +225,8 @@ create table if not exists public.photo_tags (
   unique (photo_id, profile_id)
 );
 
--- Unlike content tables (awards, quotes, etc.), both FKs here cascade
--- instead of set-null on purpose: a tag is metadata about who's IN someone
+-- Unlike content tables (events, dues, photo_comments, etc.), both FKs here
+-- cascade instead of set-null on purpose: a tag is metadata about who's IN someone
 -- else's photo, not the tagged person's own content, so there's nothing to
 -- preserve by nulling it out — deleting the photo or the tagged profile
 -- should just remove the tag row.
@@ -376,59 +256,83 @@ create policy "photo_tags_insert_by_uploader"
 -- No update/delete policy: tags are immutable after upload for v1.
 
 -- =========================================================
--- sounds (Soundboard)
+-- photo_comments (Photo Gallery comments)
 -- =========================================================
-create table if not exists public.sounds (
+create table if not exists public.photo_comments (
   id uuid primary key default gen_random_uuid(),
-  storage_path text not null,
-  title text not null,
-  uploaded_by uuid references public.profiles (id) on delete set null,
+  photo_id uuid not null references public.photos (id) on delete cascade,
+  author_id uuid references public.profiles (id) on delete set null,
+  body text not null,
   created_at timestamptz not null default now()
 );
 
--- Lets an admin pin a sound clip to the top of the home feed.
-alter table public.sounds add column if not exists pinned boolean not null default false;
+-- Comment text is content worth preserving (matches photos.uploaded_by /
+-- thread_messages.author_id), so author_id set-nulls rather than cascades:
+-- a deleted account's comments stick around, rendered under "Unknown", same
+-- as an orphaned photo upload.
+alter table public.photo_comments enable row level security;
 
--- Lets an admin hide a sound clip from the feed and Soundboard without deleting it.
-alter table public.sounds add column if not exists hidden boolean not null default false;
-
-alter table public.sounds enable row level security;
-
-drop policy if exists "sounds_select_authenticated" on public.sounds;
-create policy "sounds_select_authenticated"
-  on public.sounds for select
+drop policy if exists "photo_comments_select_authenticated" on public.photo_comments;
+create policy "photo_comments_select_authenticated"
+  on public.photo_comments for select
   to authenticated
   using (true);
 
-drop policy if exists "sounds_insert_own" on public.sounds;
-create policy "sounds_insert_own"
-  on public.sounds for insert
+drop policy if exists "photo_comments_insert_own" on public.photo_comments;
+create policy "photo_comments_insert_own"
+  on public.photo_comments for insert
   to authenticated
-  with check (uploaded_by = auth.uid());
+  with check (author_id = auth.uid());
 
-drop policy if exists "sounds_delete_own" on public.sounds;
-create policy "sounds_delete_own"
-  on public.sounds for delete
+drop policy if exists "photo_comments_delete_own" on public.photo_comments;
+create policy "photo_comments_delete_own"
+  on public.photo_comments for delete
   to authenticated
-  using (uploaded_by = auth.uid());
+  using (author_id = auth.uid());
 
--- Storage bucket backing the Soundboard. Public, same rationale as the
--- photos bucket: internal frat audio clips, not sensitive data.
-insert into storage.buckets (id, name, public)
-values ('sounds', 'sounds', true)
-on conflict (id) do nothing;
+-- No update policy: comments are delete-and-repost, not editable. Admin
+-- deletes of someone else's comment go through the service-role client
+-- (see deleteComment in social-actions.ts), which bypasses RLS rather than
+-- needing a second policy here.
 
-drop policy if exists "sounds_bucket_insert_authenticated" on storage.objects;
-create policy "sounds_bucket_insert_authenticated"
-  on storage.objects for insert
+-- =========================================================
+-- photo_reactions (Photo Gallery emoji reactions)
+-- =========================================================
+create table if not exists public.photo_reactions (
+  id uuid primary key default gen_random_uuid(),
+  photo_id uuid not null references public.photos (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  reaction_type text not null check (reaction_type in ('fire', 'heart', 'laugh', 'skull')),
+  created_at timestamptz not null default now(),
+  unique (photo_id, profile_id, reaction_type)
+);
+
+-- Unlike comments, a reaction is an identity-keyed vote about someone else's
+-- content, not content of its own — closer to photo_tags than to a comment.
+-- profile_id cascades (rather than set-null) so a deleted member's reactions
+-- disappear cleanly instead of surviving as ownerless rows.
+alter table public.photo_reactions enable row level security;
+
+drop policy if exists "photo_reactions_select_authenticated" on public.photo_reactions;
+create policy "photo_reactions_select_authenticated"
+  on public.photo_reactions for select
   to authenticated
-  with check (bucket_id = 'sounds');
+  using (true);
 
-drop policy if exists "sounds_bucket_delete_own" on storage.objects;
-create policy "sounds_bucket_delete_own"
-  on storage.objects for delete
+drop policy if exists "photo_reactions_insert_own" on public.photo_reactions;
+create policy "photo_reactions_insert_own"
+  on public.photo_reactions for insert
   to authenticated
-  using (bucket_id = 'sounds' and owner = auth.uid());
+  with check (profile_id = auth.uid());
+
+drop policy if exists "photo_reactions_delete_own" on public.photo_reactions;
+create policy "photo_reactions_delete_own"
+  on public.photo_reactions for delete
+  to authenticated
+  using (profile_id = auth.uid());
+
+-- No update policy: toggling a reaction is insert-if-absent /
+-- delete-if-present, never an update.
 
 -- =========================================================
 -- thread_messages (the Thread — general chapter banter)
@@ -457,8 +361,7 @@ create policy "thread_messages_insert_own"
   to authenticated
   with check (author_id = auth.uid());
 
--- No update/delete policy: matches awards/quotes — no editing the record after
--- the fact.
+-- No update/delete policy: no editing the record after the fact.
 
 -- Publish thread_messages over Supabase Realtime so the Thread page can
 -- stream new messages live instead of requiring a refresh. Guarded so
@@ -508,7 +411,7 @@ create policy "membership_events_select_authenticated"
   using (true);
 
 -- No client-side insert/update/delete policy: only ever written by
--- updateMember/kickMember (app/admin/rush/actions.ts) via the service-role
+-- updateMember/kickMember (app/frat-history/admin/actions.ts) via the service-role
 -- client, same reasoning as profiles itself.
 
 -- =========================================================

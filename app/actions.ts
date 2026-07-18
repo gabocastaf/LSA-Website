@@ -21,11 +21,7 @@ export async function signOut() {
 // flag on the same set of feed tables.
 const FEED_TABLES = [
   "events",
-  "awards",
-  "quotes",
-  "beefs",
   "photos",
-  "sounds",
   "thread_messages",
   "membership_events",
 ] as const;
@@ -101,11 +97,9 @@ export async function toggleHide(formData: FormData) {
   redirect(redirectTo);
 }
 
-// Only photos and sounds have a backing storage object to clean up alongside
-// the row.
+// Only photos have a backing storage object to clean up alongside the row.
 const STORAGE_BUCKET_BY_TABLE: Partial<Record<FeedTable, string>> = {
   photos: "photos",
-  sounds: "sounds",
 };
 
 // Permanent delete for admins — deliberately gated to already-hidden rows

@@ -11,11 +11,11 @@ const nextConfig: NextConfig = {
     return [
       // Not permanent (307): this reorg is fresh, so avoid a hard browser
       // cache in case the structure shifts again soon.
-      { source: "/trophy-room", destination: "/frat-history/trophy-room", permanent: false },
-      { source: "/beef-tracker", destination: "/frat-history/beef-tracker", permanent: false },
-      { source: "/kangaroo-court", destination: "/frat-history/kangaroo-court", permanent: false },
-      { source: "/photo-gallery", destination: "/frat-history/photo-gallery", permanent: false },
-      { source: "/soundboard", destination: "/frat-history/soundboard", permanent: false },
+      { source: "/photo-gallery", destination: "/moments", permanent: false },
+      { source: "/frat-history/photo-gallery", destination: "/moments", permanent: false },
+      { source: "/roster", destination: "/frat-history/roster", permanent: false },
+      { source: "/admin/rush", destination: "/frat-history/admin", permanent: false },
+      { source: "/dues", destination: "/frat-history/dues", permanent: false },
     ];
   },
 };

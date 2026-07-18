@@ -15,25 +15,19 @@ import { signOut } from "@/app/actions";
 
 const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
-  { href: "/roster", label: "Roster" },
   { href: "/events", label: "Events" },
   { href: "/thread", label: "Thread" },
-  { href: "/dues", label: "Dues" },
-  { href: "/frat-history", label: "Frat History" },
+  { href: "/moments", label: "Moments" },
+  { href: "/frat-history", label: "LSA" },
 ];
 
 export function SiteNav({
   fratTitle,
-  role,
 }: {
   fratTitle: string;
   role?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const navLinks =
-    role === "admin"
-      ? [...NAV_LINKS, { href: "/admin/rush", label: "Rush" }]
-      : NAV_LINKS;
 
   return (
     <header className="border-b">
@@ -43,7 +37,7 @@ export function SiteNav({
         </span>
 
         <nav className="hidden items-center gap-6 md:flex">
-          {navLinks.map((link) => (
+          {NAV_LINKS.map((link) => (
             <a
               key={link.href}
               href={link.href}
@@ -77,7 +71,7 @@ export function SiteNav({
                 <SheetTitle>Ligma Sigma Alpha</SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-4 px-4">
-                {navLinks.map((link) => (
+                {NAV_LINKS.map((link) => (
                   <a
                     key={link.href}
                     href={link.href}

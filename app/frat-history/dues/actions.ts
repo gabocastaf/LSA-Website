@@ -21,7 +21,7 @@ export async function logDuesPayment(formData: FormData) {
   }
 
   if (!description || Number.isNaN(amount) || amount <= 0) {
-    redirect("/dues?error=Description+and+a+positive+amount+are+required");
+    redirect("/frat-history/dues?error=Description+and+a+positive+amount+are+required");
   }
 
   const { error } = await supabase.from("dues").insert({
@@ -31,9 +31,9 @@ export async function logDuesPayment(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/dues?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/dues?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/dues");
-  redirect("/dues");
+  revalidatePath("/frat-history/dues");
+  redirect("/frat-history/dues");
 }

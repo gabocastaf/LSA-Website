@@ -1,10 +1,6 @@
 import Link from "next/link";
 import {
-  Trophy,
-  Swords,
-  Quote,
   Image as ImageIcon,
-  Music,
   CalendarDays,
   MessageCircle,
   Pin,
@@ -26,11 +22,7 @@ import { togglePin } from "@/app/actions";
 
 export type FeedKind =
   | "event"
-  | "award"
-  | "quote"
-  | "beef"
   | "photo"
-  | "sound"
   | "thread"
   | "joined"
   | "promoted"
@@ -41,11 +33,7 @@ export type FeedKind =
 
 export type PinnableTable =
   | "events"
-  | "awards"
-  | "quotes"
-  | "beefs"
   | "photos"
-  | "sounds"
   | "thread_messages"
   | "membership_events";
 
@@ -66,16 +54,12 @@ export type FeedItem = {
   title: string;
   detail?: string | null;
   href: string;
-  media?: { type: "image" | "audio"; url: string } | null;
+  media?: { type: "image"; url: string } | null;
 };
 
 const KIND_ICON: Record<FeedKind, React.ComponentType<{ className?: string }>> = {
   event: CalendarDays,
-  award: Trophy,
-  quote: Quote,
-  beef: Swords,
   photo: ImageIcon,
-  sound: Music,
   thread: MessageCircle,
   joined: UserPlus,
   promoted: ArrowUpCircle,
@@ -137,11 +121,6 @@ export function FeedItemCard({ item, isAdmin }: { item: FeedItem; isAdmin: boole
               className="aspect-video w-full rounded-lg object-cover"
             />
           </Link>
-        )}
-        {item.media?.type === "audio" && (
-          <audio controls preload="none" className="w-full" src={item.media.url}>
-            Your browser doesn&apos;t support audio, which is honestly for the best.
-          </audio>
         )}
         <Link href={item.href} className="block">
           <p className="font-medium">{item.title}</p>

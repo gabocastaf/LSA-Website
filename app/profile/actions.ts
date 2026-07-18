@@ -43,8 +43,8 @@ export async function updateDisplayName(formData: FormData) {
   }
 
   revalidatePath("/profile");
-  revalidatePath("/roster");
-  revalidatePath("/admin/rush");
+  revalidatePath("/frat-history/roster");
+  revalidatePath("/frat-history/admin");
   revalidatePath("/thread");
   revalidatePath("/");
   redirect("/profile");

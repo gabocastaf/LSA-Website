@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/utils/supabase/server";
 import { SiteNav } from "@/components/site-nav";
-import { FratHistoryTabs } from "@/components/frat-history-tabs";
+import { LsaTabs } from "@/components/lsa-tabs";
 
 export default async function FratHistoryLayout({
   children,
@@ -28,7 +28,7 @@ export default async function FratHistoryLayout({
   return (
     <div className="min-h-screen">
       <SiteNav fratTitle={viewerProfile?.frat_title ?? "Pledge"} role={viewerProfile?.role} />
-      <FratHistoryTabs />
+      <LsaTabs isAdmin={viewerProfile?.role === "admin"} />
       {children}
     </div>
   );

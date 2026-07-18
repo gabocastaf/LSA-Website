@@ -22,14 +22,14 @@ export async function updateMember(formData: FormData) {
   const user = await requireActingAdmin();
 
   if (!profileId) {
-    redirect("/admin/rush?error=Missing+profile");
+    redirect("/frat-history/admin?error=Missing+profile");
   }
 
   // Prevent the acting admin from changing their own role — a mis-click
-  // here would lock them out of /admin/rush with no UI path back in.
+  // here would lock them out of /frat-history/admin with no UI path back in.
   const isSelf = profileId === user.id;
   if (!isSelf && !isValidRole(role)) {
-    redirect("/admin/rush?error=Invalid+role");
+    redirect("/frat-history/admin?error=Invalid+role");
   }
 
   const admin = createAdminClient();
@@ -51,7 +51,7 @@ export async function updateMember(formData: FormData) {
     .eq("id", profileId);
 
   if (error) {
-    redirect(`/admin/rush?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/admin?error=${encodeURIComponent(error.message)}`);
   }
 
   if (target) {
@@ -92,10 +92,10 @@ export async function updateMember(formData: FormData) {
     }
   }
 
-  revalidatePath("/admin/rush");
-  revalidatePath("/roster");
+  revalidatePath("/frat-history/admin");
+  revalidatePath("/frat-history/roster");
   revalidatePath("/");
-  redirect("/admin/rush");
+  redirect("/frat-history/admin");
 }
 
 async function requireActingAdmin() {
@@ -129,13 +129,13 @@ export async function kickMember(formData: FormData) {
   const user = await requireActingAdmin();
 
   if (!profileId) {
-    redirect("/admin/rush?error=Missing+profile");
+    redirect("/frat-history/admin?error=Missing+profile");
   }
 
   // A mis-click here would lock the acting admin out with no UI path back
   // in — same reasoning as blocking self-role-changes above.
   if (profileId === user.id) {
-    redirect("/admin/rush?error=Can%27t+kick+yourself");
+    redirect("/frat-history/admin?error=Can%27t+kick+yourself");
   }
 
   const admin = createAdminClient();
@@ -160,7 +160,7 @@ export async function kickMember(formData: FormData) {
     .eq("id", profileId);
 
   if (error) {
-    redirect(`/admin/rush?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/admin?error=${encodeURIComponent(error.message)}`);
   }
 
   if (target) {
@@ -172,10 +172,10 @@ export async function kickMember(formData: FormData) {
     });
   }
 
-  revalidatePath("/admin/rush");
-  revalidatePath("/roster");
+  revalidatePath("/frat-history/admin");
+  revalidatePath("/frat-history/roster");
   revalidatePath("/");
-  redirect("/admin/rush");
+  redirect("/frat-history/admin");
 }
 
 export async function deleteMember(formData: FormData) {
@@ -184,27 +184,27 @@ export async function deleteMember(formData: FormData) {
   const user = await requireActingAdmin();
 
   if (!profileId) {
-    redirect("/admin/rush?error=Missing+profile");
+    redirect("/frat-history/admin?error=Missing+profile");
   }
 
   if (profileId === user.id) {
-    redirect("/admin/rush?error=Can%27t+delete+your+own+account");
+    redirect("/frat-history/admin?error=Can%27t+delete+your+own+account");
   }
 
   const admin = createAdminClient();
 
   // Cascades the profiles row via profiles.id -> auth.users(id) on delete
   // cascade. Every content table's author FK is on delete set null, so
-  // trophies/quotes/beefs/photos/sounds/events/thread messages this member
-  // created (or received) survive with an "Unknown" author.
+  // events/photos/thread messages this member created (or received) survive
+  // with an "Unknown" author.
   const { error } = await admin.auth.admin.deleteUser(profileId);
 
   if (error) {
-    redirect(`/admin/rush?error=${encodeURIComponent(error.message)}`);
+    redirect(`/frat-history/admin?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/admin/rush");
-  revalidatePath("/roster");
+  revalidatePath("/frat-history/admin");
+  revalidatePath("/frat-history/roster");
   revalidatePath("/");
-  redirect("/admin/rush");
+  redirect("/frat-history/admin");
 }
