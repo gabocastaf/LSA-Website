@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { MomentBubbleCard } from "@/components/moment-bubble-card";
+import { PhotoBubble } from "@/components/photo-bubble";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import type { PhotoComment } from "@/components/photo-comments";
 import type { ReactionType } from "@/lib/reactions";
-import { REACTION_TYPES } from "@/lib/reactions";
+import { engagementScore, tierFor, type EngagementTier } from "@/lib/engagement";
 
 type RosterProfile = { id: string; display_name: string | null; email: string; role: string };
 
@@ -17,23 +17,22 @@ export type MomentPhoto = {
   caption: string | null;
   createdAt: string;
   hidden: boolean;
+  pinned: boolean;
   uploadedBy: string | null;
-  uploader: { display_name: string | null; email: string } | null;
+  uploader: { display_name: string | null; email: string; role: string | null } | null;
   tags: { id: string; display_name: string | null; email: string }[];
   comments: PhotoComment[];
   reactionCounts: Record<ReactionType, number>;
   viewerReactedTypes: ReactionType[];
 };
 
-type Tier = "hero" | "large" | "medium" | "small";
-
 // Column span per tier — how many grid columns a bubble's footprint claims.
-// Row span is no longer tier-driven: MomentBubbleCard derives it from the
-// photo's real aspect ratio (see computeRowSpan there). "small" shares
-// medium's 1-column footprint and instead reads as smaller via a scale
-// transform on the whole bubble (applied in MomentBubbleCard) — a finer
-// column grid just for "small" wasn't worth the complexity.
-const TIER_COL_SPAN: Record<Tier, number> = {
+// Row span is not tier-driven: PhotoBubble derives it from the photo's real
+// aspect ratio (see computeRowSpan there). "small" shares medium's 1-column
+// footprint and instead reads as smaller via a scale transform on the whole
+// bubble (applied in PhotoBubble) — a finer column grid just for "small"
+// wasn't worth the complexity.
+const TIER_COL_SPAN: Record<EngagementTier, number> = {
   hero: 2,
   large: 2,
   medium: 1,
@@ -44,24 +43,6 @@ const TIER_COL_SPAN: Record<Tier, number> = {
 // multi-second cascade before the last tiles show up.
 const MAX_STAGGER_INDEX = 20;
 const STAGGER_STEP_MS = 30;
-
-function engagementScore(photo: MomentPhoto) {
-  const reactions = REACTION_TYPES.reduce((sum, type) => sum + photo.reactionCounts[type], 0);
-  return reactions + photo.comments.length;
-}
-
-// Ratio-relative-to-max means one standout photo pops even in a mostly-zero-
-// engagement gallery (the common case early on) without needing a stats
-// library. maxScore === 0 (nobody's reacted to anything yet) falls back to a
-// uniform "medium" so the wall doesn't look broken before it has any data.
-function tierFor(score: number, maxScore: number): Tier {
-  if (maxScore === 0) return "medium";
-  const ratio = score / maxScore;
-  if (ratio >= 0.75) return "hero";
-  if (ratio >= 0.4) return "large";
-  if (ratio >= 0.15) return "medium";
-  return "small";
-}
 
 export function MomentsWall({
   photos,
@@ -85,16 +66,22 @@ export function MomentsWall({
   // state never feeds back into it. Otherwise liking a bubble mid-tap could
   // resize and reflow the whole grid underneath the gesture that triggered it.
   const tieredPhotos = useMemo(() => {
-    const maxScore = Math.max(0, ...photos.map(engagementScore));
+    const maxScore = Math.max(
+      0,
+      ...photos.map((photo) => engagementScore(photo.reactionCounts, photo.comments.length)),
+    );
     return photos.map((photo) => {
-      const tier = tierFor(engagementScore(photo), maxScore);
+      const tier = tierFor(
+        engagementScore(photo.reactionCounts, photo.comments.length),
+        maxScore,
+      );
       return { photo, tier, colSpan: TIER_COL_SPAN[tier] };
     });
   }, [photos]);
 
   // Real per-column pixel width, read off the grid's own computed
   // grid-template-columns rather than duplicating the sm:/lg: breakpoint
-  // logic in JS. Feeds MomentBubbleCard's aspect-ratio-driven row-span calc.
+  // logic in JS. Feeds PhotoBubble's aspect-ratio-driven row-span calc.
   useEffect(() => {
     const el = gridRef.current;
     if (!el) return;
@@ -129,17 +116,17 @@ export function MomentsWall({
         className="mt-4 grid grid-cols-2 auto-rows-[8px] grid-flow-row-dense gap-4 sm:grid-cols-3 lg:grid-cols-4"
       >
         {tieredPhotos.map(({ photo, tier, colSpan }, i) => (
-          <MomentBubbleCard
+          <PhotoBubble
             key={photo.id}
             photo={photo}
             tier={tier}
-            colSpan={colSpan}
-            colWidth={colWidth}
+            sizing={{ mode: "grid", colSpan, colWidth }}
             index={i}
             entranceDelayMs={Math.min(i, MAX_STAGGER_INDEX) * STAGGER_STEP_MS}
             isAdmin={isAdmin}
             isOwner={photo.uploadedBy === viewerId}
             deletePhotoAction={deletePhotoAction}
+            redirectTo="/moments"
             onExpand={() => setOpenIndex(i)}
           />
         ))}

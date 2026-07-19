@@ -82,6 +82,11 @@ export async function uploadPhoto(formData: FormData) {
 export async function deletePhoto(formData: FormData) {
   const photoId = formData.get("photoId")?.toString();
   const storagePath = formData.get("storagePath")?.toString();
+  // Defaults to /moments so the original Moments call site (which doesn't
+  // send this field) keeps working unmodified — same pattern as
+  // toggleHide/deleteFeedItem in app/actions.ts, needed now that the owner
+  // delete form is also reachable from the home Feed via PhotoBubble.
+  const redirectTo = formData.get("redirectTo")?.toString() || "/moments";
 
   const supabase = await createClient();
 
@@ -94,7 +99,7 @@ export async function deletePhoto(formData: FormData) {
   }
 
   if (!photoId || !storagePath) {
-    redirect("/moments?error=Invalid+request");
+    redirect(`${redirectTo}?error=Invalid+request`);
   }
 
   const { error: deleteRowError } = await supabase
@@ -104,7 +109,7 @@ export async function deletePhoto(formData: FormData) {
     .eq("uploaded_by", user.id);
 
   if (deleteRowError) {
-    redirect(`/moments?error=${encodeURIComponent(deleteRowError.message)}`);
+    redirect(`${redirectTo}?error=${encodeURIComponent(deleteRowError.message)}`);
   }
 
   // Best-effort: the DB row is the source of truth for what's "in" the
@@ -112,6 +117,6 @@ export async function deletePhoto(formData: FormData) {
   // request over.
   await supabase.storage.from("photos").remove([storagePath]);
 
-  revalidatePath("/moments");
-  redirect("/moments");
+  revalidatePath(redirectTo);
+  redirect(redirectTo);
 }

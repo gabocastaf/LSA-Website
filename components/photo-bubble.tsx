@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Heart, Maximize2, MessageCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { vibrateLight } from "@/lib/haptics";
 import { REACTION_TYPES, REACTION_META, type ReactionType } from "@/lib/reactions";
+import type { EngagementTier } from "@/lib/engagement";
 import { toggleReaction } from "@/app/moments/social-actions";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
@@ -29,6 +30,18 @@ import type { MomentPhoto } from "@/components/moments-wall";
 //     over. Pointer capture (set on pointerdown) keeps these events routed
 //     to this element even though the tray renders in a portal on top of it.
 //
+//     IMPORTANT caveat, learned the hard way: `touch-action` (we use
+//     `pan-y` so the feed can scroll normally before a gesture resolves) is
+//     latched by the browser at the *start* of a touch for that touch's
+//     whole lifetime — nothing JS does after pointerdown can change that,
+//     including mid-gesture style mutations. So once the tray is open and
+//     the user drags upward toward it, the browser's own native pan
+//     recognizer can still hijack that same drag as a page scroll at any
+//     point, firing `pointercancel` instead of letting the drag-release
+//     finish. That's not preventable here — see the tray buttons' own
+//     `onClick` and the `longPressFired` branch in `handlePointerCancel`
+//     below for the fallback that makes selection work anyway.
+//
 //   pointerup:
 //     - if the long-press already fired: whatever emoji (if any) the pointer
 //       was last over gets selected, the tray closes, and `suppressClick` is
@@ -44,8 +57,11 @@ import type { MomentPhoto } from "@/components/moments-wall";
 //       it fires, the resolved single-tap action runs (open the lightbox for
 //       mouse, toggle the metadata overlay for touch/pen).
 //
-//   pointercancel -> full reset of every timer/flag (fires when the browser
-//     takes over the gesture for native scrolling).
+//   pointercancel -> if the long-press had NOT fired yet, this is a plain
+//     abandoned gesture (e.g. an actual scroll) and everything resets. If it
+//     HAD fired, the tray stays open (see the touch-action caveat above) —
+//     only the drag-tracking state resets, so the user can tap a tray emoji
+//     directly instead of needing to complete the drag.
 //
 // This ~300ms delay before a lone tap's action fires (for both the overlay
 // reveal and, on mouse, opening the lightbox) is an inherent cost of
@@ -69,6 +85,16 @@ const FLOAT_DELAY_MS = 150;
 const FLOAT_DURATION_BASE_MS = 4000;
 const FLOAT_DURATION_STEPS = 5;
 const FLOAT_DURATION_STEP_MS = 400;
+
+// How a bubble is sized within whatever container it's placed in: "grid" for
+// Moments' CSS-grid masonry (footprint driven by colSpan/colWidth + the
+// photo's real aspect ratio, resolved to an explicit gridRow/gridColumn),
+// "flow" for a plain single-column list like the home Feed (no grid math
+// needed — a capped max-height/max-width lets the image size itself
+// naturally by its own aspect ratio).
+type BubbleSizing =
+  | { mode: "grid"; colSpan: number; colWidth: number }
+  | { mode: "flow"; maxHeightPx: number; maxWidthPercent: number };
 
 function computeRowSpan(aspectRatio: number, colSpan: number, colWidth: number) {
   const clampedRatio = Math.min(ASPECT_MAX, Math.max(ASPECT_MIN, aspectRatio));
@@ -95,27 +121,27 @@ function prefersReducedMotion() {
   );
 }
 
-export function MomentBubbleCard({
+export function PhotoBubble({
   photo,
   tier,
-  colSpan,
-  colWidth,
+  sizing,
   index,
   entranceDelayMs,
-  isAdmin,
-  isOwner,
+  isAdmin = false,
+  isOwner = false,
   deletePhotoAction,
+  redirectTo = "/moments",
   onExpand,
 }: {
   photo: MomentPhoto;
-  tier: "hero" | "large" | "medium" | "small";
-  colSpan: number;
-  colWidth: number;
+  tier: EngagementTier;
+  sizing: BubbleSizing;
   index: number;
   entranceDelayMs: number;
-  isAdmin: boolean;
-  isOwner: boolean;
-  deletePhotoAction: (formData: FormData) => void;
+  isAdmin?: boolean;
+  isOwner?: boolean;
+  deletePhotoAction?: (formData: FormData) => void;
+  redirectTo?: string;
   onExpand: () => void;
 }) {
   const [aspectRatio, setAspectRatio] = useState(1);
@@ -139,10 +165,12 @@ export function MomentBubbleCard({
   const suppressClick = useRef(false);
   const trayHitEmojiRef = useRef<ReactionType | null>(null);
 
-  const rowSpan = useMemo(
-    () => (colWidth > 0 ? computeRowSpan(aspectRatio, colSpan, colWidth) : 40),
-    [aspectRatio, colSpan, colWidth],
-  );
+  const rowSpan =
+    sizing.mode === "grid"
+      ? sizing.colWidth > 0
+        ? computeRowSpan(aspectRatio, sizing.colSpan, sizing.colWidth)
+        : 40
+      : 0;
 
   const totalReactions = REACTION_TYPES.reduce((sum, type) => sum + counts[type], 0);
   const best = topReactionType(counts);
@@ -188,6 +216,8 @@ export function MomentBubbleCard({
   function handleDoubleTapLike() {
     const wasHearted = viewerReacted.has("heart");
     if (!prefersReducedMotion()) {
+      // Event handler, not render — a fresh key per tap is exactly the point.
+      // eslint-disable-next-line react-hooks/purity
       setBurst({ key: Date.now(), muted: wasHearted });
     }
     vibrateLight();
@@ -197,8 +227,12 @@ export function MomentBubbleCard({
   function handleTraySelect(type: ReactionType) {
     const wasReacted = viewerReacted.has(type);
     if (!prefersReducedMotion()) {
+      // Event handler, not render — a fresh key per selection is the point.
+      // eslint-disable-next-line react-hooks/purity
       setConfirmPop({ key: Date.now(), emoji: REACTION_META[type].emoji });
     }
+    setTrayOpen(false);
+    setPressed(false);
     void applyReaction(type, wasReacted);
   }
 
@@ -294,6 +328,8 @@ export function MomentBubbleCard({
       return;
     }
 
+    // Event handler, not render — timing the gap between taps is the point.
+    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     if (now - lastTapTime.current < DOUBLE_TAP_MS) {
       if (singleTapTimer.current !== null) {
@@ -318,12 +354,21 @@ export function MomentBubbleCard({
       clearTimeout(singleTapTimer.current);
       singleTapTimer.current = null;
     }
-    longPressFired.current = false;
     moved.current = false;
     trayHitEmojiRef.current = null;
     setTrayHitEmoji(null);
-    setTrayOpen(false);
-    setPressed(false);
+
+    if (!longPressFired.current) {
+      // Browser took the gesture during the pre-long-press hold (e.g. an
+      // actual scroll) — no tray was ever shown, nothing to preserve.
+      setTrayOpen(false);
+      setPressed(false);
+    }
+    // Else: the tray was already open and the drag-to-select portion just
+    // got hijacked into a native scroll. Leave it open — see the top-of-file
+    // comment for why this can't be prevented, and the tray buttons' onClick
+    // for the fallback this leaves in place.
+    longPressFired.current = false;
   }
 
   function handleClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -344,14 +389,18 @@ export function MomentBubbleCard({
   return (
     <div
       style={{
-        gridColumn: `span ${colSpan}`,
-        gridRow: `span ${rowSpan}`,
+        ...(sizing.mode === "grid"
+          ? { gridColumn: `span ${sizing.colSpan}`, gridRow: `span ${rowSpan}` }
+          : {}),
         animationDelay: `${entranceDelayMs}ms`,
       }}
       className="animate-in fade-in zoom-in-95 duration-300 fill-mode-backwards motion-reduce:animate-none"
     >
       <div
-        className="h-full w-full animate-bubble-float motion-reduce:animate-none"
+        className={cn(
+          "animate-bubble-float motion-reduce:animate-none",
+          sizing.mode === "grid" && "h-full w-full",
+        )}
         style={{
           animationDelay: floatDelay,
           animationDuration: floatDuration,
@@ -370,9 +419,11 @@ export function MomentBubbleCard({
           onClick={handleClick}
           onKeyDown={handleKeyDown}
           onContextMenu={(e) => e.preventDefault()}
+          style={sizing.mode === "flow" ? { maxWidth: `${sizing.maxWidthPercent}%` } : undefined}
           className={cn(
-            "group relative h-full w-full touch-pan-y select-none overflow-hidden rounded-5xl bg-muted shadow-md [-webkit-touch-callout:none]",
-            tier === "small" && "scale-[0.85]",
+            "group relative touch-pan-y select-none overflow-hidden rounded-5xl bg-muted shadow-md [-webkit-touch-callout:none]",
+            sizing.mode === "grid" ? "h-full w-full" : "w-fit mx-auto",
+            sizing.mode === "grid" && tier === "small" && "scale-[0.85]",
             photo.hidden && "opacity-60",
           )}
         >
@@ -383,7 +434,12 @@ export function MomentBubbleCard({
             loading="lazy"
             draggable={false}
             onLoad={handleImageLoad}
-            className="absolute inset-0 h-full w-full object-contain"
+            className={cn(
+              sizing.mode === "grid"
+                ? "absolute inset-0 h-full w-full object-contain"
+                : "block h-auto w-auto max-w-full",
+            )}
+            style={sizing.mode === "flow" ? { maxHeight: sizing.maxHeightPx } : undefined}
           />
 
           {burst && (
@@ -428,7 +484,7 @@ export function MomentBubbleCard({
                     table="photos"
                     id={photo.id}
                     hidden={photo.hidden}
-                    redirectTo="/moments"
+                    redirectTo={redirectTo}
                   />
                 )}
                 {isAdmin && photo.hidden && (
@@ -436,7 +492,7 @@ export function MomentBubbleCard({
                     table="photos"
                     id={photo.id}
                     storagePath={photo.storagePath}
-                    redirectTo="/moments"
+                    redirectTo={redirectTo}
                     itemLabel={photo.caption ?? "this photo"}
                   />
                 )}
@@ -477,10 +533,11 @@ export function MomentBubbleCard({
                 <Heart className={cn("size-3", hearted && "fill-white text-white")} />
               </p>
             )}
-            {isOwner && (
+            {isOwner && deletePhotoAction && (
               <form action={deletePhotoAction}>
                 <input type="hidden" name="photoId" value={photo.id} />
                 <input type="hidden" name="storagePath" value={photo.storagePath} />
+                <input type="hidden" name="redirectTo" value={redirectTo} />
                 <button
                   type="submit"
                   className="mt-1 w-fit rounded-full bg-destructive/90 px-2.5 py-1 text-white transition-colors hover:bg-destructive"
@@ -503,6 +560,7 @@ export function MomentBubbleCard({
                         trayButtonRefs.current[type] = el;
                       }}
                       aria-label={REACTION_META[type].label}
+                      onClick={() => handleTraySelect(type)}
                       className={cn(
                         "flex size-9 items-center justify-center rounded-full text-lg transition-transform",
                         trayHitEmoji === type && "scale-125 bg-foreground/10",

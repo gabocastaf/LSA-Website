@@ -5,6 +5,8 @@ import { SiteNav } from "@/components/site-nav";
 import { EventCountdown } from "@/components/event-countdown";
 import { FeedItemCard, type FeedItem } from "@/components/feed-item-card";
 import { ROLE_LABEL, type Role } from "@/lib/rank";
+import { fetchMomentPhotos } from "@/lib/fetch-moment-photos";
+import { engagementScore, tierFor } from "@/lib/engagement";
 
 type AuthorRow = {
   id: string;
@@ -22,16 +24,6 @@ type EventRow = {
   hidden: boolean;
   attendance: "optional" | "mandatory";
   creator: AuthorRow | null;
-};
-
-type PhotoRow = {
-  id: string;
-  storage_path: string;
-  caption: string | null;
-  created_at: string;
-  pinned: boolean;
-  hidden: boolean;
-  uploader: AuthorRow | null;
 };
 
 type ThreadRow = {
@@ -90,7 +82,7 @@ export default async function DashboardPage() {
 
   const [
     { data: eventRows },
-    { data: photoRows },
+    allPhotos,
     { data: threadRows },
     { data: joinedRows },
     { data: membershipEventRows },
@@ -102,13 +94,7 @@ export default async function DashboardPage() {
       )
       .order("event_date", { ascending: true })
       .returns<EventRow[]>(),
-    supabase
-      .from("photos")
-      .select(
-        "id, storage_path, caption, created_at, pinned, hidden, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email, role)",
-      )
-      .order("created_at", { ascending: false })
-      .returns<PhotoRow[]>(),
+    fetchMomentPhotos(supabase, user.id),
     supabase
       .from("thread_messages")
       .select(
@@ -160,23 +146,39 @@ export default async function DashboardPage() {
     href: "/events",
   }));
 
-  const photoItems: FeedItem[] = (photoRows ?? []).map((photo) => {
-    const { data: publicUrlData } = supabase.storage.from("photos").getPublicUrl(photo.storage_path);
-    return {
-      id: photo.id,
-      kind: "photo",
-      table: "photos",
-      createdAt: photo.created_at,
-      pinned: photo.pinned,
-      hidden: photo.hidden,
-      storagePath: photo.storage_path,
-      author: toAuthor(photo.uploader),
-      heading: "New Photo",
-      title: photo.caption ?? "Untitled evidence",
-      href: "/moments",
-      media: { type: "image", url: publicUrlData.publicUrl },
-    };
-  });
+  // Same visibility policy as app/moments/page.tsx (filter before tiering,
+  // not after) so a hidden photo a non-admin will never see doesn't skew the
+  // max score everyone else's tiers are computed against.
+  const visiblePhotos = allPhotos.filter((photo) => isAdmin || !photo.hidden);
+
+  // Same engagement data/tiering Moments uses (via the shared fetch +
+  // scoring libs), so a photo's size in the Feed matches its size in the
+  // gallery — max score is taken across just the photo subset, same as
+  // moments-wall.tsx does for its own grid.
+  const maxPhotoScore = Math.max(
+    0,
+    ...visiblePhotos.map((photo) => engagementScore(photo.reactionCounts, photo.comments.length)),
+  );
+
+  const photoItems: FeedItem[] = visiblePhotos.map((photo) => ({
+    id: photo.id,
+    kind: "photo",
+    table: "photos",
+    createdAt: photo.createdAt,
+    pinned: photo.pinned,
+    hidden: photo.hidden,
+    storagePath: photo.storagePath,
+    author: {
+      display_name: photo.uploader?.display_name ?? null,
+      email: photo.uploader?.email ?? null,
+      role: photo.uploader?.role ?? null,
+    },
+    heading: "New Photo",
+    title: photo.caption ?? "Untitled evidence",
+    href: "/moments",
+    photoData: photo,
+    photoTier: tierFor(engagementScore(photo.reactionCounts, photo.comments.length), maxPhotoScore),
+  }));
 
   const threadItems: FeedItem[] = (threadRows ?? []).map((message) => ({
     id: message.id,
