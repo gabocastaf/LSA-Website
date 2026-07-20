@@ -1,13 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Heart, Maximize2, MessageCircle } from "lucide-react";
+import { Heart, Maximize2, MessageCircle, Pin, PinOff } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { vibrateLight } from "@/lib/haptics";
 import { REACTION_TYPES, REACTION_META, type ReactionType } from "@/lib/reactions";
-import type { EngagementTier } from "@/lib/engagement";
 import { toggleReaction } from "@/app/moments/social-actions";
+import { togglePin } from "@/app/actions";
 import { HideToggleButton, HiddenBadge } from "@/components/hide-toggle-button";
 import { DeleteFeedItemButton } from "@/components/delete-feed-item-button";
 import { Popover, PopoverPortal, PopoverPositioner, PopoverPopup } from "@/components/ui/popover";
@@ -73,37 +73,6 @@ const DOUBLE_TAP_MS = 300;
 const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 8;
 
-const ASPECT_MIN = 0.5;
-const ASPECT_MAX = 2;
-const ROW_UNIT_PX = 8;
-const GAP_PX = 16;
-const ROW_SPAN_MIN = 20;
-const ROW_SPAN_MAX = 90;
-
-const FLOAT_DELAY_STEPS = 7;
-const FLOAT_DELAY_MS = 150;
-const FLOAT_DURATION_BASE_MS = 4000;
-const FLOAT_DURATION_STEPS = 5;
-const FLOAT_DURATION_STEP_MS = 400;
-
-// How a bubble is sized within whatever container it's placed in: "grid" for
-// Moments' CSS-grid masonry (footprint driven by colSpan/colWidth + the
-// photo's real aspect ratio, resolved to an explicit gridRow/gridColumn),
-// "flow" for a plain single-column list like the home Feed (no grid math
-// needed — a capped max-height/max-width lets the image size itself
-// naturally by its own aspect ratio).
-type BubbleSizing =
-  | { mode: "grid"; colSpan: number; colWidth: number }
-  | { mode: "flow"; maxHeightPx: number; maxWidthPercent: number };
-
-function computeRowSpan(aspectRatio: number, colSpan: number, colWidth: number) {
-  const clampedRatio = Math.min(ASPECT_MAX, Math.max(ASPECT_MIN, aspectRatio));
-  const width = colSpan * colWidth + (colSpan - 1) * GAP_PX;
-  const height = width / clampedRatio;
-  const span = Math.ceil((height + GAP_PX) / (ROW_UNIT_PX + GAP_PX));
-  return Math.min(ROW_SPAN_MAX, Math.max(ROW_SPAN_MIN, span));
-}
-
 function topReactionType(counts: Record<ReactionType, number>): ReactionType | null {
   let best: ReactionType | null = null;
   for (const type of REACTION_TYPES) {
@@ -123,9 +92,7 @@ function prefersReducedMotion() {
 
 export function PhotoBubble({
   photo,
-  tier,
-  sizing,
-  index,
+  geometry,
   entranceDelayMs,
   isAdmin = false,
   isOwner = false,
@@ -134,9 +101,7 @@ export function PhotoBubble({
   onExpand,
 }: {
   photo: MomentPhoto;
-  tier: EngagementTier;
-  sizing: BubbleSizing;
-  index: number;
+  geometry: { x: number; y: number; w: number; h: number };
   entranceDelayMs: number;
   isAdmin?: boolean;
   isOwner?: boolean;
@@ -144,9 +109,7 @@ export function PhotoBubble({
   redirectTo?: string;
   onExpand: () => void;
 }) {
-  const [aspectRatio, setAspectRatio] = useState(1);
   const [overlayOpen, setOverlayOpen] = useState(false);
-  const [pressed, setPressed] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
   const [trayHitEmoji, setTrayHitEmoji] = useState<ReactionType | null>(null);
   const [burst, setBurst] = useState<{ key: number; muted: boolean } | null>(null);
@@ -165,28 +128,9 @@ export function PhotoBubble({
   const suppressClick = useRef(false);
   const trayHitEmojiRef = useRef<ReactionType | null>(null);
 
-  const rowSpan =
-    sizing.mode === "grid"
-      ? sizing.colWidth > 0
-        ? computeRowSpan(aspectRatio, sizing.colSpan, sizing.colWidth)
-        : 40
-      : 0;
-
   const totalReactions = REACTION_TYPES.reduce((sum, type) => sum + counts[type], 0);
   const best = topReactionType(counts);
   const hearted = viewerReacted.has("heart");
-
-  const floatDelay = `${(index % FLOAT_DELAY_STEPS) * FLOAT_DELAY_MS}ms`;
-  const floatDuration = `${
-    FLOAT_DURATION_BASE_MS + (index % FLOAT_DURATION_STEPS) * FLOAT_DURATION_STEP_MS
-  }ms`;
-
-  function handleImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
-    const img = e.currentTarget;
-    if (img.naturalWidth && img.naturalHeight) {
-      setAspectRatio(img.naturalWidth / img.naturalHeight);
-    }
-  }
 
   async function applyReaction(type: ReactionType, wasReacted: boolean) {
     setViewerReacted((prev) => {
@@ -232,7 +176,6 @@ export function PhotoBubble({
       setConfirmPop({ key: Date.now(), emoji: REACTION_META[type].emoji });
     }
     setTrayOpen(false);
-    setPressed(false);
     void applyReaction(type, wasReacted);
   }
 
@@ -268,7 +211,6 @@ export function PhotoBubble({
 
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true;
-      setPressed(true);
       setTrayOpen(true);
     }, LONG_PRESS_MS);
   }
@@ -317,7 +259,6 @@ export function PhotoBubble({
       const hit = trayHitEmojiRef.current;
       longPressFired.current = false;
       setTrayOpen(false);
-      setPressed(false);
       suppressClick.current = true;
       if (hit) handleTraySelect(hit);
       return;
@@ -362,7 +303,6 @@ export function PhotoBubble({
       // Browser took the gesture during the pre-long-press hold (e.g. an
       // actual scroll) — no tray was ever shown, nothing to preserve.
       setTrayOpen(false);
-      setPressed(false);
     }
     // Else: the tray was already open and the drag-to-select portion just
     // got hijacked into a native scroll. Leave it open — see the top-of-file
@@ -388,193 +328,185 @@ export function PhotoBubble({
 
   return (
     <div
+      ref={bubbleRef}
+      role="button"
+      tabIndex={0}
+      aria-label={`View ${photo.caption ?? "photo"}${photo.hidden ? " (hidden)" : ""}`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      onContextMenu={(e) => e.preventDefault()}
       style={{
-        ...(sizing.mode === "grid"
-          ? { gridColumn: `span ${sizing.colSpan}`, gridRow: `span ${rowSpan}` }
-          : {}),
+        position: "absolute",
+        left: geometry.x,
+        top: geometry.y,
+        width: geometry.w,
+        height: geometry.h,
         animationDelay: `${entranceDelayMs}ms`,
       }}
-      className="animate-in fade-in zoom-in-95 duration-300 fill-mode-backwards motion-reduce:animate-none"
+      className={cn(
+        "group touch-pan-y select-none overflow-hidden bg-muted [-webkit-touch-callout:none]",
+        "animate-in fade-in duration-300 fill-mode-backwards motion-reduce:animate-none",
+        photo.hidden && "opacity-60",
+      )}
     >
-      <div
-        className={cn(
-          "animate-bubble-float motion-reduce:animate-none",
-          sizing.mode === "grid" && "h-full w-full",
-        )}
-        style={{
-          animationDelay: floatDelay,
-          animationDuration: floatDuration,
-          animationPlayState: pressed || trayOpen ? "paused" : "running",
-        }}
-      >
-        <div
-          ref={bubbleRef}
-          role="button"
-          tabIndex={0}
-          aria-label={`View ${photo.caption ?? "photo"}${photo.hidden ? " (hidden)" : ""}`}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
-          onClick={handleClick}
-          onKeyDown={handleKeyDown}
-          onContextMenu={(e) => e.preventDefault()}
-          style={sizing.mode === "flow" ? { maxWidth: `${sizing.maxWidthPercent}%` } : undefined}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={photo.publicUrl}
+        alt={photo.caption ?? "Chapter photo"}
+        loading="lazy"
+        draggable={false}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+
+      {burst && (
+        <Heart
+          key={burst.key}
+          onAnimationEnd={() => setBurst(null)}
           className={cn(
-            "group relative touch-pan-y select-none overflow-hidden rounded-5xl bg-muted shadow-md [-webkit-touch-callout:none]",
-            sizing.mode === "grid" ? "h-full w-full" : "w-fit mx-auto",
-            sizing.mode === "grid" && tier === "small" && "scale-[0.85]",
-            photo.hidden && "opacity-60",
+            "pointer-events-none absolute inset-0 m-auto size-16 text-white drop-shadow-lg",
+            burst.muted
+              ? "animate-heart-burst-muted fill-white/70"
+              : "animate-heart-burst fill-white",
           )}
+        />
+      )}
+
+      {confirmPop && (
+        <span
+          key={confirmPop.key}
+          onAnimationEnd={() => setConfirmPop(null)}
+          className="animate-heart-burst-muted pointer-events-none absolute right-2 top-2 text-2xl drop-shadow"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photo.publicUrl}
-            alt={photo.caption ?? "Chapter photo"}
-            loading="lazy"
-            draggable={false}
-            onLoad={handleImageLoad}
-            className={cn(
-              sizing.mode === "grid"
-                ? "absolute inset-0 h-full w-full object-contain"
-                : "block h-auto w-auto max-w-full",
-            )}
-            style={sizing.mode === "flow" ? { maxHeight: sizing.maxHeightPx } : undefined}
-          />
+          {confirmPop.emoji}
+        </span>
+      )}
 
-          {burst && (
-            <Heart
-              key={burst.key}
-              onAnimationEnd={() => setBurst(null)}
-              className={cn(
-                "pointer-events-none absolute inset-0 m-auto size-16 text-white drop-shadow-lg",
-                burst.muted
-                  ? "animate-heart-burst-muted fill-white/70"
-                  : "animate-heart-burst fill-white",
-              )}
-            />
-          )}
-
-          {confirmPop && (
-            <span
-              key={confirmPop.key}
-              onAnimationEnd={() => setConfirmPop(null)}
-              className="animate-heart-burst-muted pointer-events-none absolute right-2 top-2 text-2xl drop-shadow"
-            >
-              {confirmPop.emoji}
-            </span>
-          )}
-
-          <div
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              "pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/75 via-black/40 to-transparent p-3 text-xs text-white/90 opacity-0 transition-opacity duration-200",
-              "group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
-              overlayOpen && "pointer-events-auto opacity-100",
-              "[&_button]:text-white/90 [&_button:hover]:bg-white/15 [&_button:hover]:text-white",
-            )}
-          >
-            <div className="flex items-center justify-between gap-2">
-              {photo.caption && <p className="line-clamp-1 font-medium text-white">{photo.caption}</p>}
-              <span className="flex shrink-0 items-center gap-1">
-                {photo.hidden && <HiddenBadge />}
-                {isAdmin && (
-                  <HideToggleButton
-                    table="photos"
-                    id={photo.id}
-                    hidden={photo.hidden}
-                    redirectTo={redirectTo}
-                  />
-                )}
-                {isAdmin && photo.hidden && (
-                  <DeleteFeedItemButton
-                    table="photos"
-                    id={photo.id}
-                    storagePath={photo.storagePath}
-                    redirectTo={redirectTo}
-                    itemLabel={photo.caption ?? "this photo"}
-                  />
-                )}
-                <button
-                  type="button"
-                  aria-label="View full size"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onExpand();
-                  }}
-                  className="rounded-full p-1.5 transition-colors hover:bg-white/15"
-                >
-                  <Maximize2 className="size-3.5" />
-                </button>
-              </span>
-            </div>
-            <p className="line-clamp-1 text-white/70">
-              {photo.uploader?.display_name ?? photo.uploader?.email ?? "Unknown"} ·{" "}
-              {new Date(photo.createdAt).toLocaleDateString()}
-            </p>
-            {photo.tags.length > 0 && (
-              <p className="line-clamp-1 text-white/70">
-                Featuring: {photo.tags.map((tag) => tag.display_name ?? tag.email).join(", ")}
-              </p>
-            )}
-            {(totalReactions > 0 || photo.comments.length > 0) && (
-              <p className="flex items-center gap-2 text-white/70">
-                {totalReactions > 0 && best && (
-                  <span>
-                    {REACTION_META[best].emoji} {totalReactions}
-                  </span>
-                )}
-                {photo.comments.length > 0 && (
-                  <span className="flex items-center gap-1">
-                    <MessageCircle className="size-3" /> {photo.comments.length}
-                  </span>
-                )}
-                <Heart className={cn("size-3", hearted && "fill-white text-white")} />
-              </p>
-            )}
-            {isOwner && deletePhotoAction && (
-              <form action={deletePhotoAction}>
-                <input type="hidden" name="photoId" value={photo.id} />
-                <input type="hidden" name="storagePath" value={photo.storagePath} />
-                <input type="hidden" name="redirectTo" value={redirectTo} />
+      <div
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/75 via-black/40 to-transparent p-3 text-xs text-white/90 opacity-0 transition-opacity duration-200",
+          "group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+          overlayOpen && "pointer-events-auto opacity-100",
+          "[&_button]:text-white/90 [&_button:hover]:bg-white/15 [&_button:hover]:text-white",
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          {photo.caption && <p className="line-clamp-1 font-medium text-white">{photo.caption}</p>}
+          <span className="flex shrink-0 items-center gap-1">
+            {photo.hidden && <HiddenBadge />}
+            {isAdmin && (
+              <form action={togglePin}>
+                <input type="hidden" name="table" value="photos" />
+                <input type="hidden" name="id" value={photo.id} />
+                <input type="hidden" name="pinned" value={(!photo.pinned).toString()} />
                 <button
                   type="submit"
-                  className="mt-1 w-fit rounded-full bg-destructive/90 px-2.5 py-1 text-white transition-colors hover:bg-destructive"
+                  aria-label={photo.pinned ? "Unpin" : "Pin to top"}
+                  className="rounded-full p-1.5 transition-colors hover:bg-white/15"
                 >
-                  Delete
+                  {photo.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
                 </button>
               </form>
             )}
-          </div>
-
-          <Popover open={trayOpen} onOpenChange={setTrayOpen} modal={false}>
-            <PopoverPortal>
-              <PopoverPositioner anchor={bubbleRef} side="top" sideOffset={12} collisionPadding={8}>
-                <PopoverPopup>
-                  {REACTION_TYPES.map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      ref={(el) => {
-                        trayButtonRefs.current[type] = el;
-                      }}
-                      aria-label={REACTION_META[type].label}
-                      onClick={() => handleTraySelect(type)}
-                      className={cn(
-                        "flex size-9 items-center justify-center rounded-full text-lg transition-transform",
-                        trayHitEmoji === type && "scale-125 bg-foreground/10",
-                      )}
-                    >
-                      {REACTION_META[type].emoji}
-                    </button>
-                  ))}
-                </PopoverPopup>
-              </PopoverPositioner>
-            </PopoverPortal>
-          </Popover>
+            {isAdmin && (
+              <HideToggleButton
+                table="photos"
+                id={photo.id}
+                hidden={photo.hidden}
+                redirectTo={redirectTo}
+              />
+            )}
+            {isAdmin && photo.hidden && (
+              <DeleteFeedItemButton
+                table="photos"
+                id={photo.id}
+                storagePath={photo.storagePath}
+                redirectTo={redirectTo}
+                itemLabel={photo.caption ?? "this photo"}
+              />
+            )}
+            <button
+              type="button"
+              aria-label="View full size"
+              onClick={(e) => {
+                e.stopPropagation();
+                onExpand();
+              }}
+              className="rounded-full p-1.5 transition-colors hover:bg-white/15"
+            >
+              <Maximize2 className="size-3.5" />
+            </button>
+          </span>
         </div>
+        <p className="line-clamp-1 text-white/70">
+          {photo.uploader?.display_name ?? photo.uploader?.email ?? "Unknown"} ·{" "}
+          {new Date(photo.createdAt).toLocaleDateString()}
+        </p>
+        {photo.tags.length > 0 && (
+          <p className="line-clamp-1 text-white/70">
+            Featuring: {photo.tags.map((tag) => tag.display_name ?? tag.email).join(", ")}
+          </p>
+        )}
+        {(totalReactions > 0 || photo.comments.length > 0) && (
+          <p className="flex items-center gap-2 text-white/70">
+            {totalReactions > 0 && best && (
+              <span>
+                {REACTION_META[best].emoji} {totalReactions}
+              </span>
+            )}
+            {photo.comments.length > 0 && (
+              <span className="flex items-center gap-1">
+                <MessageCircle className="size-3" /> {photo.comments.length}
+              </span>
+            )}
+            <Heart className={cn("size-3", hearted && "fill-white text-white")} />
+          </p>
+        )}
+        {isOwner && deletePhotoAction && (
+          <form action={deletePhotoAction}>
+            <input type="hidden" name="photoId" value={photo.id} />
+            <input type="hidden" name="storagePath" value={photo.storagePath} />
+            <input type="hidden" name="redirectTo" value={redirectTo} />
+            <button
+              type="submit"
+              className="mt-1 w-fit rounded-full bg-destructive/90 px-2.5 py-1 text-white transition-colors hover:bg-destructive"
+            >
+              Delete
+            </button>
+          </form>
+        )}
       </div>
+
+      <Popover open={trayOpen} onOpenChange={setTrayOpen} modal={false}>
+        <PopoverPortal>
+          <PopoverPositioner anchor={bubbleRef} side="top" sideOffset={12} collisionPadding={8}>
+            <PopoverPopup>
+              {REACTION_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  ref={(el) => {
+                    trayButtonRefs.current[type] = el;
+                  }}
+                  aria-label={REACTION_META[type].label}
+                  onClick={() => handleTraySelect(type)}
+                  className={cn(
+                    "flex size-9 items-center justify-center rounded-full text-lg transition-transform",
+                    trayHitEmoji === type && "scale-125 bg-foreground/10",
+                  )}
+                >
+                  {REACTION_META[type].emoji}
+                </button>
+              ))}
+            </PopoverPopup>
+          </PopoverPositioner>
+        </PopoverPortal>
+      </Popover>
     </div>
   );
 }

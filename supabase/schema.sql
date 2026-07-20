@@ -174,6 +174,15 @@ alter table public.photos add column if not exists pinned boolean not null defau
 -- it (e.g. test uploads before real users join, or moderating uploads later).
 alter table public.photos add column if not exists hidden boolean not null default false;
 
+-- Native pixel dimensions, captured client-side at upload time. The mosaic
+-- layouts (Moments, and photo clusters in the Feed) need every photo's real
+-- aspect ratio up front to lay a whole batch out at once -- discovering it
+-- one <img onLoad> at a time would reflow the entire layout repeatedly as
+-- photos finish loading. Nullable: photos uploaded before this column
+-- existed fall back to a square aspect ratio in the layout code.
+alter table public.photos add column if not exists width integer;
+alter table public.photos add column if not exists height integer;
+
 alter table public.photos enable row level security;
 
 drop policy if exists "photos_select_authenticated" on public.photos;

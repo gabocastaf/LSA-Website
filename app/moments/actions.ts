@@ -8,10 +8,26 @@ import { createClient } from "@/utils/supabase/server";
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
+// The mosaic layouts (Moments, and photo clusters in the Feed) run a shared
+// layout algorithm across a whole batch of photos at once -- a bad value
+// here (e.g. a hand-crafted form POST bypassing the browser's own dimension
+// read) doesn't just break one photo's cell like the old per-photo CSS Grid
+// did, it can produce Infinity/NaN math that blanks the entire layout. Only
+// ever store a positive, finite integer; anything else becomes null, same
+// as a pre-migration photo with no stored dimensions at all.
+function parsePositiveInt(formData: FormData, field: string): number | null {
+  const raw = formData.get(field)?.toString();
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && Number.isInteger(value) && value > 0 ? value : null;
+}
+
 export async function uploadPhoto(formData: FormData) {
   const file = formData.get("file");
   const caption = formData.get("caption")?.toString().trim();
   const taggedProfileIds = formData.getAll("taggedProfileIds").map((id) => id.toString());
+  const width = parsePositiveInt(formData, "width");
+  const height = parsePositiveInt(formData, "height");
 
   const supabase = await createClient();
 
@@ -52,6 +68,8 @@ export async function uploadPhoto(formData: FormData) {
       storage_path: storagePath,
       caption: caption || null,
       uploaded_by: user.id,
+      width,
+      height,
     })
     .select("id")
     .single();

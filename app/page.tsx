@@ -4,9 +4,10 @@ import { createClient } from "@/utils/supabase/server";
 import { SiteNav } from "@/components/site-nav";
 import { EventCountdown } from "@/components/event-countdown";
 import { FeedItemCard, type FeedItem } from "@/components/feed-item-card";
+import { PhotoMosaicGroup } from "@/components/photo-mosaic-group";
 import { ROLE_LABEL, type Role } from "@/lib/rank";
 import { fetchMomentPhotos } from "@/lib/fetch-moment-photos";
-import { engagementScore, tierFor } from "@/lib/engagement";
+import { engagementScore, normalizedEngagement } from "@/lib/engagement";
 
 type AuthorRow = {
   id: string;
@@ -59,6 +60,28 @@ const NO_AUTHOR = { display_name: null, email: null, role: null };
 
 function toAuthor(row: AuthorRow | null) {
   return row ? { display_name: row.display_name, email: row.email, role: row.role } : NO_AUTHOR;
+}
+
+// This app has no multi-photo-post concept -- every photo is its own
+// independent chronological feed entry -- so "mosaic on the Feed" means
+// grouping whichever photo items happen to land next to each other in the
+// sorted stream (e.g. two uploads posted close together with nothing else
+// in between) into one tight PhotoMosaicGroup instead of one Card each. A
+// run of length 1 just renders as a single full-width photo, same code
+// path, no special-casing.
+function groupConsecutivePhotos(items: FeedItem[]): (FeedItem | FeedItem[])[] {
+  const groups: (FeedItem | FeedItem[])[] = [];
+  for (const item of items) {
+    const last = groups[groups.length - 1];
+    if (item.kind === "photo" && Array.isArray(last)) {
+      last.push(item);
+    } else if (item.kind === "photo") {
+      groups.push([item]);
+    } else {
+      groups.push(item);
+    }
+  }
+  return groups;
 }
 
 export default async function DashboardPage() {
@@ -177,7 +200,10 @@ export default async function DashboardPage() {
     title: photo.caption ?? "Untitled evidence",
     href: "/moments",
     photoData: photo,
-    photoTier: tierFor(engagementScore(photo.reactionCounts, photo.comments.length), maxPhotoScore),
+    photoEngagement: normalizedEngagement(
+      engagementScore(photo.reactionCounts, photo.comments.length),
+      maxPhotoScore,
+    ),
   }));
 
   const threadItems: FeedItem[] = (threadRows ?? []).map((message) => ({
@@ -294,9 +320,18 @@ export default async function DashboardPage() {
           <>
             <h2 className="mt-8 text-lg font-semibold tracking-tight">📌 Pinned</h2>
             <div className="mt-4 space-y-4">
-              {pinnedItems.map((item) => (
-                <FeedItemCard key={`${item.table}-${item.id}`} item={item} isAdmin={isAdmin} />
-              ))}
+              {groupConsecutivePhotos(pinnedItems).map((entry) =>
+                Array.isArray(entry) ? (
+                  <PhotoMosaicGroup
+                    key={`group-${entry[0].id}`}
+                    items={entry}
+                    viewerId={user.id}
+                    isAdmin={isAdmin}
+                  />
+                ) : (
+                  <FeedItemCard key={`${entry.table}-${entry.id}`} item={entry} isAdmin={isAdmin} />
+                ),
+              )}
             </div>
           </>
         )}
@@ -308,9 +343,18 @@ export default async function DashboardPage() {
           </p>
         ) : (
           <div className="mt-4 space-y-4">
-            {streamItems.map((item) => (
-              <FeedItemCard key={`${item.table}-${item.id}`} item={item} isAdmin={isAdmin} />
-            ))}
+            {groupConsecutivePhotos(streamItems).map((entry) =>
+              Array.isArray(entry) ? (
+                <PhotoMosaicGroup
+                  key={`group-${entry[0].id}`}
+                  items={entry}
+                  viewerId={user.id}
+                  isAdmin={isAdmin}
+                />
+              ) : (
+                <FeedItemCard key={`${entry.table}-${entry.id}`} item={entry} isAdmin={isAdmin} />
+              ),
+            )}
           </div>
         )}
       </main>

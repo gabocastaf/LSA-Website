@@ -12,6 +12,8 @@ type PhotoRow = {
   created_at: string;
   hidden: boolean;
   pinned: boolean;
+  width: number | null;
+  height: number | null;
   uploaded_by: string | null;
   uploader: UploaderRef;
   tags: { profile: ProfileRef }[];
@@ -44,7 +46,7 @@ export async function fetchMomentPhotos(
   const { data: photoRows } = await supabase
     .from("photos")
     .select(
-      "id, storage_path, caption, created_at, hidden, pinned, uploaded_by, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email, role), tags:photo_tags(profile:profiles(id, display_name, email)), comments:photo_comments(id, body, created_at, author_id, author:profiles(id, display_name, email, role)), reactions:photo_reactions(profile_id, reaction_type)",
+      "id, storage_path, caption, created_at, hidden, pinned, width, height, uploaded_by, uploader:profiles!photos_uploaded_by_fkey(id, display_name, email, role), tags:photo_tags(profile:profiles(id, display_name, email)), comments:photo_comments(id, body, created_at, author_id, author:profiles(id, display_name, email, role)), reactions:photo_reactions(profile_id, reaction_type)",
     )
     .order("created_at", { ascending: false })
     .order("created_at", { foreignTable: "photo_comments", ascending: true })
@@ -72,6 +74,8 @@ export async function fetchMomentPhotos(
       createdAt: photo.created_at,
       hidden: photo.hidden,
       pinned: photo.pinned,
+      width: photo.width,
+      height: photo.height,
       uploadedBy: photo.uploaded_by,
       uploader: photo.uploader,
       tags: photo.tags

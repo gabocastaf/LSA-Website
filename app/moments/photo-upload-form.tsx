@@ -20,7 +20,9 @@ function isHeic(file: File) {
   );
 }
 
-async function convertToJpeg(file: File): Promise<File> {
+type Dimensions = { width: number; height: number };
+
+async function convertToJpeg(file: File): Promise<{ file: File } & Dimensions> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
@@ -40,8 +42,31 @@ async function convertToJpeg(file: File): Promise<File> {
     );
   });
 
-  return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", {
-    type: "image/jpeg",
+  return {
+    file: new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }),
+    width: canvas.width,
+    height: canvas.height,
+  };
+}
+
+// Lighter-weight than createImageBitmap for the common (non-HEIC) case --
+// just needs naturalWidth/naturalHeight, not a full decoded bitmap. Feeds
+// the mosaic layouts on Moments/the Feed, which need every photo's real
+// aspect ratio before they can lay a batch out (see schema.sql's note on
+// photos.width/height).
+function readImageDimensions(file: File): Promise<Dimensions | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
   });
 }
 
@@ -62,6 +87,7 @@ export function PhotoUploadForm({ roster }: { roster: Member[] }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "converting" | "ready">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState<Dimensions | null>(null);
 
   const acceptFileRef = useRef<(file: File) => void>(() => {});
 
@@ -70,16 +96,21 @@ export function PhotoUploadForm({ roster }: { roster: Member[] }) {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     previewUrlRef.current = null;
     setPreviewUrl(null);
+    setDimensions(null);
   }
 
   async function acceptFile(file: File) {
     setError(null);
 
     let finalFile = file;
+    let dims: Dimensions | null = null;
+
     if (isHeic(file)) {
       setStatus("converting");
       try {
-        finalFile = await convertToJpeg(file);
+        const converted = await convertToJpeg(file);
+        finalFile = converted.file;
+        dims = { width: converted.width, height: converted.height };
       } catch {
         clearSelection();
         setStatus("idle");
@@ -88,7 +119,11 @@ export function PhotoUploadForm({ roster }: { roster: Member[] }) {
         );
         return;
       }
+    } else {
+      dims = await readImageDimensions(file);
     }
+
+    setDimensions(dims);
 
     if (inputRef.current) {
       const dataTransfer = new DataTransfer();
@@ -142,6 +177,12 @@ export function PhotoUploadForm({ roster }: { roster: Member[] }) {
 
   return (
     <form action={uploadPhoto} className="flex flex-col gap-3">
+      {dimensions && (
+        <>
+          <input type="hidden" name="width" value={dimensions.width} />
+          <input type="hidden" name="height" value={dimensions.height} />
+        </>
+      )}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="file">Photo</Label>
         <input
